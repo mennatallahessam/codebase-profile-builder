@@ -1,4 +1,4 @@
-import { Commit, PullRequest, Contributor } from '../types';
+import { Commit, PullRequest, Contributor } from '../../types';
 
 /**
  * Utility helpers to compute various repository metrics.
@@ -9,6 +9,7 @@ import { Commit, PullRequest, Contributor } from '../types';
 export function commitsPerDay(commits: Commit[]) {
   const map = new Map<string, number>(); // YYYY-MM-DD -> count
   commits.forEach((c) => {
+    if (!c.commit?.author?.date) return;
     const date = new Date(c.commit.author.date).toISOString().slice(0, 10);
     map.set(date, (map.get(date) ?? 0) + 1);
   });
@@ -19,6 +20,7 @@ export function commitsPerDay(commits: Commit[]) {
 export function commitsPerWeek(commits: Commit[]) {
   const map = new Map<string, number>(); // year-week -> count
   commits.forEach((c) => {
+    if (!c.commit?.author?.date) return;
     const d = new Date(c.commit.author.date);
     const year = d.getUTCFullYear();
     const week = getWeekNumber(d);
@@ -46,6 +48,7 @@ function getWeekNumber(d: Date) {
 export function timeOfDayDistribution(commits: Commit[]) {
   const buckets = { morning: 0, afternoon: 0, evening: 0, night: 0 };
   commits.forEach((c) => {
+    if (!c.commit?.author?.date) return;
     const hour = new Date(c.commit.author.date).getUTCHours();
     if (hour >= 6 && hour < 12) buckets.morning++;
     else if (hour >= 12 && hour < 18) buckets.afternoon++;
@@ -60,6 +63,7 @@ export function timeOfDayDistribution(commits: Commit[]) {
 export function ratioByKeyword(commits: Commit[], keywords: string[]) {
   const total = commits.length || 1;
   const matching = commits.filter((c) => {
+    if (!c.commit?.message) return false;
     const msg = c.commit.message.toLowerCase();
     return keywords.some((kw) => msg.includes(kw));
   }).length;
@@ -68,29 +72,30 @@ export function ratioByKeyword(commits: Commit[], keywords: string[]) {
 
 /** Fix ratio */
 export function fixRatio(commits: Commit[]) {
-  return ratioByKeyword(commits, ['fix', 'bug', 'hotfix', 'patch']);
+  return ratioByKeyword(commits, ['fix', 'bug', 'hotfix', 'patch', 'resolve', 'error']);
 }
 /** Feature ratio */
 export function featureRatio(commits: Commit[]) {
-  return ratioByKeyword(commits, ['feat', 'feature', 'add', 'implement']);
+  return ratioByKeyword(commits, ['feat', 'feature', 'add', 'implement', 'new']);
 }
 /** Refactor ratio */
 export function refactorRatio(commits: Commit[]) {
-  return ratioByKeyword(commits, ['refactor', 'cleanup', 'restructure', 'reorganize']);
+  return ratioByKeyword(commits, ['refactor', 'cleanup', 'restructure', 'reorganize', 'optimise', 'optimize']);
 }
 /** Test ratio */
 export function testRatio(commits: Commit[]) {
-  return ratioByKeyword(commits, ['test', 'spec', 'testing']);
+  return ratioByKeyword(commits, ['test', 'spec', 'testing', 'jest', 'cypress', 'mock']);
 }
 
 /** Bus factor – number of contributors that own >50% of commits */
 export function busFactor(commits: Commit[]): number {
   const authorCounts = new Map<string, number>();
   commits.forEach((c) => {
-    const author = c.author?.login || c.commit.author?.name || 'unknown';
+    const author = c.author?.login || c.commit?.author?.name || 'unknown';
     authorCounts.set(author, (authorCounts.get(author) ?? 0) + 1);
   });
   const total = commits.length;
+  if (total === 0) return 0;
   const sorted = Array.from(authorCounts.values()).sort((a, b) => b - a);
   let cumulative = 0;
   let members = 0;
@@ -106,7 +111,7 @@ export function busFactor(commits: Commit[]): number {
 export function collaborationIndex(commits: Commit[]) {
   const fileAuthors = new Map<string, Set<string>>();
   commits.forEach((c) => {
-    const author = c.author?.login || c.commit.author?.name || 'unknown';
+    const author = c.author?.login || c.commit?.author?.name || 'unknown';
     const files = c.files?.map((f) => f.filename) ?? [];
     files.forEach((file) => {
       if (!fileAuthors.has(file)) fileAuthors.set(file, new Set());
@@ -134,6 +139,5 @@ export function computeAllMetrics(commits: Commit[], prs: PullRequest[], contrib
     },
     busFactor: busFactor(commits),
     collaborationIndex: collaborationIndex(commits),
-    // Additional metrics can be added later
   };
 }
