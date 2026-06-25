@@ -1,0 +1,27 @@
+datasource db {
+  provider = "postgresql"
+  // url moved to prisma/config.ts
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Repository {
+  id        Int      @id @default(autoincrement())
+  owner     String
+  name      String
+  url       String
+  createdAt DateTime @default(now())
+  metrics   Metric[]
+}
+
+model Metric {
+  id          Int      @id @default(autoincrement())
+  repositoryId Int
+  type         String
+  value        Float
+  detailsJson  Json?
+  createdAt    DateTime @default(now())
+  repository   Repository @relation(fields: [repositoryId], references: [id])
+}

@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 
-export async function callOpenAI(prompt: string): Promise<any> {
-  const apiKey = process.env.OPENAI_API_KEY;
+export async function callOpenAI(prompt: string, customOpenAiKey?: string): Promise<any> {
+  const apiKey = (customOpenAiKey && customOpenAiKey.trim() !== '') ? customOpenAiKey : process.env.OPENAI_API_KEY;
   if (!apiKey || apiKey === 'your_openai_key' || apiKey.startsWith('your_') || apiKey === '') {
     console.warn('OPENAI_API_KEY is not set or is mock. Using mock engine fallback.');
     return getMockResponse(prompt);
@@ -105,8 +105,8 @@ function getMockResponse(prompt: string): any {
   };
 }
 
-export async function callOpenAIForContributors(prompt: string, contributorsMetrics: any[]): Promise<any> {
-  const apiKey = process.env.OPENAI_API_KEY;
+export async function callOpenAIForContributors(prompt: string, contributorsMetrics: any[], customOpenAiKey?: string): Promise<any> {
+  const apiKey = (customOpenAiKey && customOpenAiKey.trim() !== '') ? customOpenAiKey : process.env.OPENAI_API_KEY;
   if (!apiKey || apiKey === 'your_openai_key' || apiKey.startsWith('your_') || apiKey === '') {
     console.warn('OPENAI_API_KEY is not set or is mock. Using mock contributor engine fallback.');
     return getMockContributorsResponse(contributorsMetrics);

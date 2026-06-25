@@ -9,25 +9,26 @@ const repoSchema = z.object({
   name: z.string(),
 });
 
-function getHeaders() {
+function getHeaders(customToken?: string) {
   const headers: Record<string, string> = {
     'Accept': 'application/vnd.github.v3+json',
   };
-  if (GITHUB_TOKEN && GITHUB_TOKEN !== 'your_github_pat' && GITHUB_TOKEN.trim() !== '') {
-    headers['Authorization'] = `token ${GITHUB_TOKEN}`;
+  const token = (customToken && customToken.trim() !== '') ? customToken : GITHUB_TOKEN;
+  if (token && token !== 'your_github_pat' && token.trim() !== '') {
+    headers['Authorization'] = `token ${token}`;
   }
   return headers;
 }
 
-export async function fetchRepoMeta(owner: string, name: string) {
+export async function fetchRepoMeta(owner: string, name: string, customToken?: string) {
   const url = `${API_BASE}/repos/${owner}/${name}`;
   const res = await axios.get(url, {
-    headers: getHeaders(),
+    headers: getHeaders(customToken),
   });
   return res.data;
 }
 
-export async function fetchAllCommits(owner: string, name: string) {
+export async function fetchAllCommits(owner: string, name: string, customToken?: string) {
   const perPage = 100;
   let page = 1;
   const commits: any[] = [];
@@ -37,7 +38,7 @@ export async function fetchAllCommits(owner: string, name: string) {
     const url = `${API_BASE}/repos/${owner}/${name}/commits?per_page=${perPage}&page=${page}`;
     try {
       const { data } = await axios.get(url, {
-        headers: getHeaders(),
+        headers: getHeaders(customToken),
       });
       if (!data || data.length === 0) break;
       commits.push(...data);
@@ -51,7 +52,7 @@ export async function fetchAllCommits(owner: string, name: string) {
   return commits;
 }
 
-export async function fetchPullRequests(owner: string, name: string) {
+export async function fetchPullRequests(owner: string, name: string, customToken?: string) {
   const perPage = 100;
   let page = 1;
   const prs: any[] = [];
@@ -60,7 +61,7 @@ export async function fetchPullRequests(owner: string, name: string) {
     const url = `${API_BASE}/repos/${owner}/${name}/pulls?state=all&per_page=${perPage}&page=${page}`;
     try {
       const { data } = await axios.get(url, {
-        headers: getHeaders(),
+        headers: getHeaders(customToken),
       });
       if (!data || data.length === 0) break;
       prs.push(...data);
@@ -74,7 +75,7 @@ export async function fetchPullRequests(owner: string, name: string) {
   return prs;
 }
 
-export async function fetchContributors(owner: string, name: string) {
+export async function fetchContributors(owner: string, name: string, customToken?: string) {
   const perPage = 100;
   let page = 1;
   const contributors: any[] = [];
@@ -83,7 +84,7 @@ export async function fetchContributors(owner: string, name: string) {
     const url = `${API_BASE}/repos/${owner}/${name}/contributors?per_page=${perPage}&page=${page}`;
     try {
       const { data } = await axios.get(url, {
-        headers: getHeaders(),
+        headers: getHeaders(customToken),
       });
       if (!data || data.length === 0) break;
       contributors.push(...data);
@@ -97,11 +98,11 @@ export async function fetchContributors(owner: string, name: string) {
   return contributors;
 }
 
-export async function fetchContributorStats(owner: string, name: string) {
+export async function fetchContributorStats(owner: string, name: string, customToken?: string) {
   const url = `${API_BASE}/repos/${owner}/${name}/stats/contributors`;
   try {
     const res = await axios.get(url, {
-      headers: getHeaders(),
+      headers: getHeaders(customToken),
     });
     // GitHub stats endpoint can return 202 if it's compiling stats. We return empty array or data.
     if (res.status === 202) {
@@ -115,11 +116,11 @@ export async function fetchContributorStats(owner: string, name: string) {
   }
 }
 
-export async function fetchPackageJson(owner: string, name: string) {
+export async function fetchPackageJson(owner: string, name: string, customToken?: string) {
   const url = `${API_BASE}/repos/${owner}/${name}/contents/package.json`;
   try {
     const res = await axios.get(url, {
-      headers: getHeaders(),
+      headers: getHeaders(customToken),
     });
     if (res.data && res.data.content) {
       const decoded = Buffer.from(res.data.content, 'base64').toString('utf-8');

@@ -21,32 +21,96 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing repository identifier or URL' }, { status: 400 });
     }
 
+    // Read custom API credentials from headers
+    const customGithubToken = req.headers.get('x-github-token') || undefined;
+    const customOpenAiKey = req.headers.get('x-openai-key') || undefined;
+
     // Normalise to owner/name
     let owner = '';
     let name = '';
     if (repo) {
-      const parts = repo.split('/');
+      const trimmed = repo.trim();
+      const parts = trimmed.split('/');
       if (parts.length !== 2 || !parts[0] || !parts[1]) {
         return NextResponse.json({ error: 'Invalid repository format. Use "owner/name".' }, { status: 400 });
       }
       [owner, name] = parts;
     } else if (url) {
-      const match = url.match(/github\.com\/([^/]+)\/([^/]+)/);
+      // Strip trailing slashes, query strings, fragments and whitespace
+      const cleanUrl = url.trim().replace(/[/?#].*$|\/+$/, (m, offset, str) => {
+        // Only strip after the repo name segment
+        const ghMatch = str.match(/github\.com\/([^/]+)\/([^/?#]+)/);
+        return ghMatch ? '' : m;
+      });
+      const match = (url.trim()).match(/github\.com\/([^/\s?#]+)\/([^/\s?#]+)/);
       if (!match || !match[1] || !match[2]) {
         return NextResponse.json({ error: 'Invalid GitHub repository URL' }, { status: 400 });
       }
       owner = match[1];
-      name = match[2].replace(/\.git$/, ''); // Strip potential trailing .git
+      name = match[2].replace(/\.git$/, '').replace(/\s.*$/, ''); // Strip .git and anything after whitespace
+    }
+
+    // ✅ 0️⃣ Cache-first: return stored result if analyzed within the last hour
+    try {
+      const cached = await prisma.repository.findUnique({
+        where: { owner_name: { owner, name } },
+        include: {
+          contributors: {
+            include: {
+              contributorMetrics: true,
+              contributorProfile: true,
+            },
+          },
+        },
+      });
+
+      if (cached && cached.profileJson && cached.metricsJson) {
+        const ageMs = Date.now() - new Date(cached.createdAt).getTime();
+        const ONE_HOUR = 60 * 60 * 1000;
+        if (ageMs < ONE_HOUR) {
+          console.log(`Cache hit for ${owner}/${name} (${Math.round(ageMs / 60000)}m old) — skipping GitHub API.`);
+          const profile = JSON.parse(cached.profileJson as string);
+          const metrics = JSON.parse(cached.metricsJson as string);
+          const health = cached.healthJson ? JSON.parse(cached.healthJson as string) : null;
+
+          const contributors = cached.contributors.map((c) => {
+            const cMetrics = c.contributorMetrics ? JSON.parse(c.contributorMetrics.detailsJson as string) : {};
+            const cProfile = c.contributorProfile ? {
+              archetype: c.contributorProfile.archetype,
+              summary: c.contributorProfile.summary,
+              traits: JSON.parse(c.contributorProfile.traitsJson as string),
+              superlatives: JSON.parse(c.contributorProfile.superlativesJson as string),
+              funFact: c.contributorProfile.funFact,
+            } : { archetype: 'The Developer', summary: '', traits: [], superlatives: [], funFact: '' };
+
+            return { username: c.username, avatarUrl: c.avatarUrl, displayName: c.displayName, ...cMetrics, profile: cProfile };
+          });
+
+          return NextResponse.json({
+            id: cached.id,
+            repository: { owner, name, url: cached.url },
+            metrics,
+            profile,
+            health,
+            contributors,
+            collaborationGraph: [],
+            lastAnalyzed: cached.createdAt.toISOString(),
+            fromCache: true,
+          });
+        }
+      }
+    } catch (cacheErr) {
+      console.warn('Cache lookup failed, proceeding with fresh fetch:', cacheErr);
     }
 
     // 1️⃣ Fetch data from GitHub API
     const [meta, commits, prs, contributors, stats, packageJson] = await Promise.all([
-      fetchRepoMeta(owner, name),
-      fetchAllCommits(owner, name),
-      fetchPullRequests(owner, name),
-      fetchContributors(owner, name),
-      fetchContributorStats(owner, name),
-      fetchPackageJson(owner, name),
+      fetchRepoMeta(owner, name, customGithubToken),
+      fetchAllCommits(owner, name, customGithubToken),
+      fetchPullRequests(owner, name, customGithubToken),
+      fetchContributors(owner, name, customGithubToken),
+      fetchContributorStats(owner, name, customGithubToken),
+      fetchPackageJson(owner, name, customGithubToken),
     ]);
 
     // 2️⃣ Compute Metrics
@@ -61,8 +125,8 @@ export async function POST(req: NextRequest) {
 
     // 4️⃣ Call OpenAI (or fall back to mock)
     const [llmResponse, contributorsLlmResponse] = await Promise.all([
-      callOpenAI(prompt),
-      callOpenAIForContributors(contributorsPrompt, contributorMetrics),
+      callOpenAI(prompt, customOpenAiKey),
+      callOpenAIForContributors(contributorsPrompt, contributorMetrics, customOpenAiKey),
     ]);
 
     // Map AI profiles back onto contributor metric objects
@@ -243,13 +307,31 @@ export async function POST(req: NextRequest) {
 
     if (error.response) {
       if (error.response.status === 404) {
-        message = 'Repository not found. Ensure it is public and correct.';
+        message = 'Repository not found. Make sure it is public and the name is correct (e.g. "facebook/react").';
         status = 404;
-      } else if (error.response.status === 403 && error.response.headers['x-ratelimit-remaining'] === '0') {
-        message = 'GitHub API rate limit exceeded. Try again later or set a GITHUB_TOKEN.';
-        status = 429;
+      } else if (error.response.status === 403) {
+        const resetEpoch = parseInt(error.response.headers['x-ratelimit-reset'] || '0', 10);
+        const remaining = error.response.headers['x-ratelimit-remaining'];
+        const rateLimitMsg = error.response.data?.message || '';
+
+        if (remaining === '0' || rateLimitMsg.toLowerCase().includes('rate limit')) {
+          let resetInfo = '';
+          if (resetEpoch) {
+            const resetDate = new Date(resetEpoch * 1000);
+            const mins = Math.ceil((resetDate.getTime() - Date.now()) / 60000);
+            resetInfo = ` Resets in ~${mins} minute${mins !== 1 ? 's' : ''}.`;
+          }
+          message = `GitHub API rate limit exceeded (60 requests/hour for unauthenticated users).${resetInfo} Fix: add your GitHub Personal Access Token to the GITHUB_TOKEN variable in the .env file to get 5,000 requests/hour.`;
+          status = 429;
+        } else if (rateLimitMsg.toLowerCase().includes('too large')) {
+          message = 'This repository is too large for GitHub\'s contributor API. Try a smaller repository.';
+          status = 403;
+        } else {
+          message = rateLimitMsg || 'GitHub API returned 403 Forbidden. Your GITHUB_TOKEN may be invalid or lack repo read permissions.';
+          status = 403;
+        }
       } else if (error.response.status === 401) {
-        message = 'GitHub access token is invalid.';
+        message = 'GitHub access token is invalid. Check your GITHUB_TOKEN in the .env file.';
         status = 401;
       } else {
         message = error.response.data?.message || message;

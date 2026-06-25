@@ -100,6 +100,12 @@ export default function Home() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'traits' | 'metrics' | 'predictions' | 'contributors' | 'health' | 'compare'>('overview');
   const [isMounted, setIsMounted] = useState(false);
+  const [hasGithubToken, setHasGithubToken] = useState<boolean | null>(null);
+
+  // Settings credentials states
+  const [showSettings, setShowSettings] = useState(false);
+  const [clientGhToken, setClientGhToken] = useState('');
+  const [clientOpenAiKey, setClientOpenAiKey] = useState('');
 
   // Track A: Contributor Intelligence state
   const [selectedContributor, setSelectedContributor] = useState<any | null>(null);
@@ -122,6 +128,27 @@ export default function Home() {
 
   useEffect(() => {
     setIsMounted(true);
+    // Load local credentials
+    if (typeof window !== 'undefined') {
+      const savedToken = localStorage.getItem('custom_github_token') || '';
+      const savedKey = localStorage.getItem('custom_openai_key') || '';
+      setClientGhToken(savedToken);
+      setClientOpenAiKey(savedKey);
+    }
+
+    // Check if GITHUB_TOKEN is configured on the server or client
+    fetch('/api/status')
+      .then(r => r.json())
+      .then(d => {
+        const serverHasToken = !!d.hasGithubToken;
+        const clientHasToken = typeof window !== 'undefined' && !!localStorage.getItem('custom_github_token');
+        setHasGithubToken(serverHasToken || clientHasToken);
+      })
+      .catch(() => {
+        const clientHasToken = typeof window !== 'undefined' && !!localStorage.getItem('custom_github_token');
+        setHasGithubToken(clientHasToken);
+      });
+
     return () => {
       if (logIntervalRef.current) clearInterval(logIntervalRef.current);
     };
@@ -160,9 +187,19 @@ export default function Home() {
     try {
       const payload = input.startsWith('http') ? { url: input.trim() } : { repo: input.trim() };
       
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (typeof window !== 'undefined') {
+        const token = localStorage.getItem('custom_github_token');
+        const key = localStorage.getItem('custom_openai_key');
+        if (token && token.trim() !== '') headers['x-github-token'] = token.trim();
+        if (key && key.trim() !== '') headers['x-openai-key'] = key.trim();
+      }
+
       const res = await fetch('/api/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(payload),
       });
 
@@ -210,9 +247,19 @@ export default function Home() {
     try {
       const payload = comparisonInput.startsWith('http') ? { url: comparisonInput.trim() } : { repo: comparisonInput.trim() };
       
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (typeof window !== 'undefined') {
+        const token = localStorage.getItem('custom_github_token');
+        const key = localStorage.getItem('custom_openai_key');
+        if (token && token.trim() !== '') headers['x-github-token'] = token.trim();
+        if (key && key.trim() !== '') headers['x-openai-key'] = key.trim();
+      }
+
       const res = await fetch('/api/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(payload),
       });
 
@@ -247,6 +294,27 @@ export default function Home() {
     setComparisonLogs([]);
     setSelectedCompareUsers([]);
     setShowCompareUsersPanel(false);
+  };
+
+  const handleSaveSettings = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('custom_github_token', clientGhToken.trim());
+      localStorage.setItem('custom_openai_key', clientOpenAiKey.trim());
+      
+      const hasClientToken = clientGhToken.trim() !== '';
+      setHasGithubToken(hasClientToken || null); // null or false to trigger status check, or set directly
+      // Let's re-run status fetch or set it directly based on client token
+      fetch('/api/status')
+        .then(r => r.json())
+        .then(d => {
+          setHasGithubToken(!!d.hasGithubToken || hasClientToken);
+        })
+        .catch(() => {
+          setHasGithubToken(hasClientToken);
+        });
+    }
+    setShowSettings(false);
   };
 
   // Safe formatting for ratios
@@ -306,17 +374,30 @@ export default function Home() {
             </div>
           </div>
           
-          <a
-            href="https://github.com"
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors bg-slate-900/80 border border-slate-800 rounded-lg px-3 py-1.5"
-          >
-            <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
-            </svg>
-            <span>GitHub</span>
-          </a>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowSettings(true)}
+              className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors bg-slate-900/80 border border-slate-800 hover:border-slate-700 rounded-lg px-3 py-1.5 active:scale-[0.98]"
+            >
+              <svg className="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span>API Credentials</span>
+            </button>
+
+            <a
+              href="https://github.com"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors bg-slate-900/80 border border-slate-800 rounded-lg px-3 py-1.5"
+            >
+              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+              </svg>
+              <span>GitHub</span>
+            </a>
+          </div>
         </div>
       </header>
 
@@ -371,9 +452,25 @@ export default function Home() {
                   </button>
                 </div>
               </div>
+
+              {/* Rate limit hint — only shown when no token is configured */}
+              {hasGithubToken === false && (
+                <p className="mt-4 text-slate-600 text-xs font-mono">
+                  ⚡ No GitHub token detected — limited to 60 API calls/hr.{' '}
+                  <button
+                    type="button"
+                    onClick={() => setShowSettings(true)}
+                    className="text-indigo-500 hover:text-indigo-400 underline bg-transparent border-none p-0 cursor-pointer font-mono"
+                  >
+                    Add a free token
+                  </button>
+                  {' '}for 5,000/hr. Previously analyzed repos load from cache.
+                </p>
+              )}
             </form>
           </div>
         )}
+
 
         {/* State 2: Scanning Loading Logs */}
         {status === 'scanning' && (
@@ -408,25 +505,78 @@ export default function Home() {
         )}
 
         {/* State 3: Error */}
-        {status === 'error' && (
-          <div className="w-full max-w-md bg-slate-950/60 border border-red-900/40 rounded-2xl p-6 shadow-2xl backdrop-blur-md text-center">
-            <div className="w-16 h-16 rounded-full bg-red-950/50 border border-red-500/30 flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
+        {status === 'error' && (() => {
+          const isRateLimit = errorMsg.toLowerCase().includes('rate limit');
+          const isNotFound = errorMsg.toLowerCase().includes('not found');
+          return (
+            <div className={`w-full max-w-lg bg-slate-950/60 border rounded-2xl p-6 shadow-2xl backdrop-blur-md ${isRateLimit ? 'border-amber-900/40' : 'border-red-900/40'}`}>
+              <div className={`w-16 h-16 rounded-full border flex items-center justify-center mx-auto mb-4 ${isRateLimit ? 'bg-amber-950/50 border-amber-500/30' : 'bg-red-950/50 border-red-500/30'}`}>
+                {isRateLimit ? (
+                  <svg className="w-8 h-8 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                  </svg>
+                ) : (
+                  <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                )}
+              </div>
+
+              <h2 className="text-xl font-bold text-slate-200 mb-2 text-center">
+                {isRateLimit ? '⚡ GitHub Rate Limit Hit' : 'Analysis Failed'}
+              </h2>
+
+              <p className="text-slate-400 text-sm mb-5 leading-relaxed text-center">
+                {errorMsg || 'We encountered an error. Make sure the repo is public and the name is correct.'}
+              </p>
+
+              {isRateLimit && (
+                <div className="mb-5 bg-slate-900/80 border border-amber-900/30 rounded-xl p-4 text-left">
+                  <p className="text-amber-400 text-xs font-bold font-mono uppercase tracking-wider mb-3">
+                    🔑 Fix: Add a GitHub Token (free, takes 60 seconds)
+                  </p>
+                  <ol className="text-slate-300 text-xs space-y-2 leading-relaxed list-none">
+                    <li className="flex gap-2">
+                      <span className="text-amber-500 font-bold shrink-0">1.</span>
+                      <span>Go to <a href="https://github.com/settings/tokens/new?description=Codebase+Profiler&scopes=public_repo" target="_blank" rel="noreferrer" className="text-indigo-400 underline hover:text-indigo-300">github.com/settings/tokens</a> → "Generate new token (classic)"</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-amber-500 font-bold shrink-0">2.</span>
+                      <span>Check <code className="bg-black/40 px-1 rounded text-amber-300">public_repo</code> scope → click "Generate token"</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-amber-500 font-bold shrink-0">3.</span>
+                      <span>Open <code className="bg-black/40 px-1 rounded text-slate-200">.env</code> in the project root and set:</span>
+                    </li>
+                  </ol>
+                  <div className="mt-2 ml-5 bg-black/50 rounded-lg px-3 py-2 font-mono text-xs text-emerald-400 border border-black/40">
+                    GITHUB_TOKEN=ghp_your_token_here
+                  </div>
+                  <p className="text-slate-500 text-[10px] mt-2 ml-5">Then restart the dev server with <code className="text-slate-400">npm run dev</code></p>
+                </div>
+              )}
+
+              {isNotFound && (
+                <div className="mb-5 bg-slate-900/60 border border-slate-800 rounded-xl p-4 text-left">
+                  <p className="text-slate-400 text-xs font-mono mb-2">💡 <strong className="text-slate-300">Tips:</strong></p>
+                  <ul className="text-slate-400 text-xs space-y-1.5 list-none">
+                    <li>• Use the format <code className="bg-black/40 px-1 rounded text-indigo-300">owner/repo</code> (e.g. <code className="bg-black/40 px-1 rounded text-indigo-300">facebook/react</code>)</li>
+                    <li>• Or paste the full URL: <code className="bg-black/40 px-1 rounded text-indigo-300">https://github.com/owner/repo</code></li>
+                    <li>• The repository must be <strong className="text-slate-300">public</strong></li>
+                  </ul>
+                </div>
+              )}
+
+              <button
+                onClick={resetSearch}
+                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 font-medium text-sm rounded-lg border border-slate-800 active:scale-[0.98] transition"
+              >
+                ← Try Another Repository
+              </button>
             </div>
-            <h2 className="text-xl font-bold text-slate-200 mb-2">Analysis Failed</h2>
-            <p className="text-slate-400 text-sm mb-6 leading-relaxed">
-              {errorMsg || 'We encountered an error while indexing this repository. Make sure the name is correct and it is a public GitHub repository.'}
-            </p>
-            <button
-              onClick={resetSearch}
-              className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 font-medium text-sm rounded-lg border border-slate-850 active:scale-[0.98] transition"
-            >
-              Try Another Repository
-            </button>
-          </div>
-        )}
+          );
+        })()}
+
 
         {/* State 4: Profile Output Dashboard */}
         {status === 'success' && result && (
@@ -1801,6 +1951,93 @@ export default function Home() {
           Made with &hearts; by Antigravity AI Pair Programmer &copy; {new Date().getFullYear()}
         </p>
       </footer>
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
+          <div className="relative w-full max-w-lg bg-slate-950 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-2xl overflow-hidden">
+            {/* Glowing border accent */}
+            <div className="absolute -top-12 -left-12 w-32 h-32 rounded-full bg-purple-500/10 blur-2xl pointer-events-none" />
+            <div className="absolute -bottom-12 -right-12 w-32 h-32 rounded-full bg-indigo-500/10 blur-2xl pointer-events-none" />
+
+            <div className="flex justify-between items-center border-b border-slate-900 pb-4 mb-6">
+              <h2 className="text-xl font-bold tracking-tight text-slate-100 flex items-center gap-2">
+                <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                </svg>
+                API Credentials Setup
+              </h2>
+              <button
+                onClick={() => setShowSettings(false)}
+                className="text-slate-400 hover:text-white transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSettings} className="space-y-6">
+              <div>
+                <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-2">
+                  GitHub Personal Access Token (PAT)
+                </label>
+                <input
+                  type="password"
+                  value={clientGhToken}
+                  onChange={(e) => setClientGhToken(e.target.value)}
+                  placeholder="ghp_..."
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm font-mono"
+                />
+                <p className="mt-1.5 text-[11px] text-slate-500 leading-relaxed font-mono">
+                  Used to bypass GitHub's 60 requests/hr unauthenticated rate limit.{' '}
+                  <a
+                    href="https://github.com/settings/tokens/new?description=Codebase+Profiler&scopes=public_repo"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-indigo-400 hover:text-indigo-300 underline"
+                  >
+                    Generate free PAT (classic)
+                  </a>{' '}
+                  with the <code className="text-slate-400">public_repo</code> scope.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-2">
+                  OpenAI API Key (Optional)
+                </label>
+                <input
+                  type="password"
+                  value={clientOpenAiKey}
+                  onChange={(e) => setClientOpenAiKey(e.target.value)}
+                  placeholder="sk-proj-..."
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm font-mono"
+                />
+                <p className="mt-1.5 text-[11px] text-slate-500 leading-relaxed font-mono">
+                  Optionally provide your own key to run analysis using GPT-4o-mini directly. Fallbacks to server-configured keys or sarcasm simulation mockup if empty.
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-medium text-sm rounded-xl hover:shadow-lg hover:shadow-purple-500/20 active:scale-[0.98] transition"
+                >
+                  Save Settings
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowSettings(false)}
+                  className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-300 font-medium text-sm rounded-xl active:scale-[0.98] transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
