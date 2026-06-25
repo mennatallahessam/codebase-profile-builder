@@ -59,3 +59,51 @@ Generate a JSON response representing the codebase's personality. Keep it light-
 
 Return ONLY the raw JSON. Do not include markdown code block syntax (like \`\`\`json) in your response. Just return the valid JSON string.`;
 }
+
+export function buildContributorsPrompt(contributorsMetrics: any[]) {
+  const summarizedMetrics = contributorsMetrics.map((c) => ({
+    username: c.username,
+    commitsCount: c.commitsCount,
+    additions: c.additions,
+    deletions: c.deletions,
+    avgCommitSize: c.averageCommitSize,
+    fixRatio: c.ratios.fix.toFixed(1) + '%',
+    featRatio: c.ratios.feature.toFixed(1) + '%',
+    refactorRatio: c.ratios.refactor.toFixed(1) + '%',
+    testRatio: c.ratios.test.toFixed(1) + '%',
+    longestStreak: c.streaks.longestStreak,
+    prsOpened: c.prsOpened,
+    prsMerged: c.prsMerged,
+    topLanguage: c.languages[0]?.language || 'unknown',
+  }));
+
+  return `You are the Codebase Personality Profiler, a witty and highly sarcastic AI bot. Analyze the metrics of each contributor in the repository to generate hilarious, roasting, yet accurate developer personality profiles.
+
+Contributors data:
+${JSON.stringify(summarizedMetrics, null, 2)}
+
+Generate a JSON response containing an array of contributor profiles under a "contributors" key. Keep it extremely light-hearted, humorous, and highly engaging. Respond with EXACTLY this JSON structure:
+{
+  "contributors": [
+    {
+      "username": "string (matching the username in the input data)",
+      "archetype": "string (name of the personality archetype, e.g., 'The Midnight Refactorer', 'The Drive-By Committer', 'The Test Whisperer', 'The One-Line Hero')",
+      "summary": "string (a witty paragraph roasting/describing their developer style based on their stats)",
+      "traits": [
+        {
+          "name": "string (name of the trait, e.g., 'Anxiety Index', 'Review Allergy', 'Line Bloater')",
+          "score": number (0 to 100),
+          "description": "string (funny description explaining why they got this score)"
+        }
+      ],
+      "superlatives": [
+        "string (2 funny tags, e.g., 'Night Owl', 'Weekend Warrior', 'Git Anarchist')"
+      ],
+      "funFact": "string (one specific, true, stat-derived observation, e.g., 'Writes commits that are 90% deletion and 10% coding')"
+    }
+  ]
+}
+
+Return ONLY the raw JSON. Do not include markdown code block syntax (like \`\`\`json) in your response. Just return the valid JSON string.`;
+}
+

@@ -13,7 +13,7 @@ function getHeaders() {
   const headers: Record<string, string> = {
     'Accept': 'application/vnd.github.v3+json',
   };
-  if (GITHUB_TOKEN) {
+  if (GITHUB_TOKEN && GITHUB_TOKEN !== 'your_github_pat' && GITHUB_TOKEN.trim() !== '') {
     headers['Authorization'] = `token ${GITHUB_TOKEN}`;
   }
   return headers;
@@ -96,3 +96,40 @@ export async function fetchContributors(owner: string, name: string) {
   }
   return contributors;
 }
+
+export async function fetchContributorStats(owner: string, name: string) {
+  const url = `${API_BASE}/repos/${owner}/${name}/stats/contributors`;
+  try {
+    const res = await axios.get(url, {
+      headers: getHeaders(),
+    });
+    // GitHub stats endpoint can return 202 if it's compiling stats. We return empty array or data.
+    if (res.status === 202) {
+      console.warn('GitHub contributor stats returned 202 (Accepted). Retrying is skipped to maintain fast speed.');
+      return [];
+    }
+    return res.data || [];
+  } catch (err) {
+    console.error('Error fetching contributor stats:', err);
+    return [];
+  }
+}
+
+export async function fetchPackageJson(owner: string, name: string) {
+  const url = `${API_BASE}/repos/${owner}/${name}/contents/package.json`;
+  try {
+    const res = await axios.get(url, {
+      headers: getHeaders(),
+    });
+    if (res.data && res.data.content) {
+      const decoded = Buffer.from(res.data.content, 'base64').toString('utf-8');
+      return JSON.parse(decoded);
+    }
+    return null;
+  } catch (err) {
+    // If package.json doesn't exist, we return null
+    return null;
+  }
+}
+
+

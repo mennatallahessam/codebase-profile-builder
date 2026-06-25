@@ -1,11 +1,11 @@
-export const dynamic = 'force-dynamic';
-
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchRepoMeta, fetchAllCommits, fetchPullRequests, fetchContributors } from '../../../lib/github';
+import { fetchRepoMeta, fetchAllCommits, fetchPullRequests, fetchContributors, fetchContributorStats, fetchPackageJson } from '../../../lib/github';
 import { computeAllMetrics } from '../../../lib/metrics';
+import { computeContributorMetrics, computeCollaborationGraph } from '../../../lib/contributors';
+import { computeRepoHealth } from '../../../lib/repoHealth';
 import prisma from '../../../lib/prisma';
-import { buildPrompt } from '../../../lib/prompt';
-import { callOpenAI } from '../../../lib/openai';
+import { buildPrompt, buildContributorsPrompt } from '../../../lib/prompt';
+import { callOpenAI, callOpenAIForContributors } from '../../../lib/openai';
 
 export async function POST(req: NextRequest) {
   try {
@@ -40,39 +40,201 @@ export async function POST(req: NextRequest) {
     }
 
     // 1️⃣ Fetch data from GitHub API
-    const [meta, commits, prs, contributors] = await Promise.all([
+    const [meta, commits, prs, contributors, stats, packageJson] = await Promise.all([
       fetchRepoMeta(owner, name),
       fetchAllCommits(owner, name),
       fetchPullRequests(owner, name),
       fetchContributors(owner, name),
+      fetchContributorStats(owner, name),
+      fetchPackageJson(owner, name),
     ]);
 
     // 2️⃣ Compute Metrics
     const metrics = computeAllMetrics(commits, prs, contributors);
+    const contributorMetrics = computeContributorMetrics(commits, prs, stats, contributors);
+    const collaborationGraph = computeCollaborationGraph(commits);
+    const health = computeRepoHealth(commits, packageJson);
 
-    // 3️⃣ Attempt database persistence (gracefully degrade if DB fails)
-    try {
-      await prisma.repository.upsert({
-        where: { owner_name: { owner, name } },
-        update: { url: meta.html_url },
-        create: { owner, name, url: meta.html_url },
+    // 3️⃣ Construct LLM prompts
+    const prompt = buildPrompt({ owner, name, meta, metrics, commits });
+    const contributorsPrompt = buildContributorsPrompt(contributorMetrics);
+
+    // 4️⃣ Call OpenAI (or fall back to mock)
+    const [llmResponse, contributorsLlmResponse] = await Promise.all([
+      callOpenAI(prompt),
+      callOpenAIForContributors(contributorsPrompt, contributorMetrics),
+    ]);
+
+    // Map AI profiles back onto contributor metric objects
+    const contributorsProfilesMap = new Map<string, any>();
+    if (contributorsLlmResponse && Array.isArray(contributorsLlmResponse.contributors)) {
+      contributorsLlmResponse.contributors.forEach((prof: any) => {
+        if (prof.username) {
+          contributorsProfilesMap.set(prof.username.toLowerCase(), prof);
+        }
       });
-    } catch (dbError) {
-      console.warn('Prisma database operation failed, skipping persistence:', dbError);
     }
 
-    // 4️⃣ Construct LLM prompt
-    const prompt = buildPrompt({ owner, name, meta, metrics, commits });
+    const contributorsCombined = contributorMetrics.map((c) => {
+      const profile = contributorsProfilesMap.get(c.username.toLowerCase()) || {
+        archetype: 'The Developer',
+        summary: 'A developer contributing changes to the repository.',
+        traits: [
+          { name: 'Fix Anxiety', score: 30, description: 'Normal bug fix rates.' },
+          { name: 'Testing Discipline', score: 40, description: 'Standard unit tests.' },
+        ],
+        superlatives: ['Developer'],
+        funFact: 'Contributes code consistently.',
+      };
+      return {
+        ...c,
+        profile,
+      };
+    });
 
-    // 5️⃣ Call OpenAI (or fall back to mock)
-    const llmResponse = await callOpenAI(prompt);
-
-    // 6️⃣ Respond
-    return NextResponse.json({
-      repository: { owner, name, url: meta.html_url, description: meta.description, stars: meta.stargazers_count },
+    const fullResult = {
+      id: 0,
+      repository: {
+        owner,
+        name,
+        url: meta.html_url,
+        description: meta.description,
+        stars: meta.stargazers_count,
+      },
       metrics,
       profile: llmResponse,
-    });
+      health,
+      contributors: contributorsCombined,
+      collaborationGraph,
+      lastAnalyzed: new Date().toISOString(),
+    };
+
+    // 5️⃣ Attempt database persistence (gracefully degrade if DB fails)
+    try {
+      // Upsert main repo record
+      const dbRepo = await prisma.repository.upsert({
+        where: { owner_name: { owner, name } },
+        update: {
+          url: meta.html_url,
+          profileJson: JSON.stringify(llmResponse),
+          metricsJson: JSON.stringify(metrics),
+          healthJson: JSON.stringify(health),
+        },
+        create: {
+          owner,
+          name,
+          url: meta.html_url,
+          profileJson: JSON.stringify(llmResponse),
+          metricsJson: JSON.stringify(metrics),
+          healthJson: JSON.stringify(health),
+        },
+      });
+
+      fullResult.id = dbRepo.id;
+
+      // Persist contributors, details & profiles
+      for (const c of contributorsCombined) {
+        const dbCont = await prisma.contributor.upsert({
+          where: {
+            repositoryId_username: {
+              repositoryId: dbRepo.id,
+              username: c.username,
+            },
+          },
+          update: {
+            avatarUrl: c.avatarUrl,
+            displayName: c.displayName,
+          },
+          create: {
+            repositoryId: dbRepo.id,
+            username: c.username,
+            avatarUrl: c.avatarUrl,
+            displayName: c.displayName,
+          },
+        });
+
+        // Upsert Contributor Metrics
+        await prisma.contributorMetric.upsert({
+          where: { contributorId: dbCont.id },
+          update: {
+            detailsJson: JSON.stringify({
+              commitsCount: c.commitsCount,
+              additions: c.additions,
+              deletions: c.deletions,
+              netLines: c.netLines,
+              averageCommitSize: c.averageCommitSize,
+              largestCommit: c.largestCommit,
+              longestGap: c.longestGap,
+              timeOfDay: c.timeOfDay,
+              dayOfWeek: c.dayOfWeek,
+              ratios: c.ratios,
+              languages: c.languages,
+              prsOpened: c.prsOpened,
+              prsMerged: c.prsMerged,
+              prsReviewed: c.prsReviewed,
+              averageTimeToMerge: c.averageTimeToMerge,
+              reviewCommentsGiven: c.reviewCommentsGiven,
+              reviewCommentsReceived: c.reviewCommentsReceived,
+              heatmap: c.heatmap,
+              streaks: c.streaks,
+              mostActiveDay: c.mostActiveDay,
+            }),
+          },
+          create: {
+            contributorId: dbCont.id,
+            detailsJson: JSON.stringify({
+              commitsCount: c.commitsCount,
+              additions: c.additions,
+              deletions: c.deletions,
+              netLines: c.netLines,
+              averageCommitSize: c.averageCommitSize,
+              largestCommit: c.largestCommit,
+              longestGap: c.longestGap,
+              timeOfDay: c.timeOfDay,
+              dayOfWeek: c.dayOfWeek,
+              ratios: c.ratios,
+              languages: c.languages,
+              prsOpened: c.prsOpened,
+              prsMerged: c.prsMerged,
+              prsReviewed: c.prsReviewed,
+              averageTimeToMerge: c.averageTimeToMerge,
+              reviewCommentsGiven: c.reviewCommentsGiven,
+              reviewCommentsReceived: c.reviewCommentsReceived,
+              heatmap: c.heatmap,
+              streaks: c.streaks,
+              mostActiveDay: c.mostActiveDay,
+            }),
+          },
+        });
+
+        // Upsert Contributor Profile
+        await prisma.contributorProfile.upsert({
+          where: { contributorId: dbCont.id },
+          update: {
+            archetype: c.profile.archetype,
+            summary: c.profile.summary,
+            traitsJson: JSON.stringify(c.profile.traits),
+            superlativesJson: JSON.stringify(c.profile.superlatives),
+            funFact: c.profile.funFact,
+          },
+          create: {
+            contributorId: dbCont.id,
+            archetype: c.profile.archetype,
+            summary: c.profile.summary,
+            traitsJson: JSON.stringify(c.profile.traits),
+            superlativesJson: JSON.stringify(c.profile.superlatives),
+            funFact: c.profile.funFact,
+          },
+        });
+      }
+    } catch (dbError) {
+      console.warn('Prisma database operations failed, skipping persistent cache:', dbError);
+      // Give a random mock ID for session consistency if DB isn't active
+      fullResult.id = Math.floor(Math.random() * 1000000) + 1;
+    }
+
+    // 6️⃣ Respond
+    return NextResponse.json(fullResult);
 
   } catch (error: any) {
     console.error('Analysis endpoint failure:', error);
@@ -100,3 +262,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: message }, { status });
   }
 }
+

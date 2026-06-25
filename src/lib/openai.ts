@@ -104,3 +104,115 @@ function getMockResponse(prompt: string): any {
     ]
   };
 }
+
+export async function callOpenAIForContributors(prompt: string, contributorsMetrics: any[]): Promise<any> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey || apiKey === 'your_openai_key' || apiKey.startsWith('your_') || apiKey === '') {
+    console.warn('OPENAI_API_KEY is not set or is mock. Using mock contributor engine fallback.');
+    return getMockContributorsResponse(contributorsMetrics);
+  }
+
+  try {
+    const openai = new OpenAI({ apiKey });
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a sarcastic, witty codebase analyst. You analyze contributor metrics to output a humorous, roasted profile in JSON format.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.85,
+    });
+
+    const responseText = response.choices[0]?.message?.content || '{}';
+    let cleanResponse = responseText.trim();
+    if (cleanResponse.startsWith('```json')) {
+      cleanResponse = cleanResponse.substring(7);
+    }
+    if (cleanResponse.endsWith('```')) {
+      cleanResponse = cleanResponse.substring(0, cleanResponse.length - 3);
+    }
+    cleanResponse = cleanResponse.trim();
+    return JSON.parse(cleanResponse);
+  } catch (error) {
+    console.error('Error calling OpenAI for contributors, falling back to mock response:', error);
+    return getMockContributorsResponse(contributorsMetrics);
+  }
+}
+
+function getMockContributorsResponse(contributorsMetrics: any[]): any {
+  const contributors = contributorsMetrics.map((c) => {
+    const commitsCount = c.commitsCount || 0;
+    const fixRatio = c.ratios.fix || 0;
+    const testRatio = c.ratios.test || 0;
+    const avgCommitSize = c.averageCommitSize || 0;
+    const prsOpened = c.prsOpened || 0;
+    const lang = c.languages[0]?.language || 'code';
+
+    let archetype = 'The Consistent Builder';
+    let summary = `This contributor averages around ${avgCommitSize} lines per commit. They are a reliable cog in this chaotic repository, pushing ${commitsCount} commits, mostly working with ${lang}.`;
+    let superlatives = ['Consistent Coder', `${lang} Writer`];
+
+    if (commitsCount <= 3) {
+      archetype = 'The Drive-By Committer';
+      summary = `With only ${commitsCount} commits, this contributor appears to drop in, push some code, and disappear before anyone can ask questions. A true master of hit-and-run development.`;
+      superlatives = ['Hit and Run', 'Mysterious Guest'];
+    } else if (fixRatio > 40) {
+      archetype = 'The Nocturnal Firefighter';
+      summary = `Welcome to the emergency department. ${fixRatio.toFixed(0)}% of this author's commits are fixes or patches. They are likely writing code in a state of high anxiety, fixing bugs that they (or their peers) pushed yesterday.`;
+      superlatives = ['Code Firefighter', 'Anxiety Engine'];
+    } else if (testRatio > 15) {
+      archetype = 'The Quality Assurance Disciple';
+      summary = `Writing specs and testing is this author's core passion. With a test ratio of ${testRatio.toFixed(0)}%, they are the only reason this repository builds successfully in CI.`;
+      superlatives = ['CI Savior', 'Test Guru'];
+    } else if (avgCommitSize > 400) {
+      archetype = 'The One-Line Bloater';
+      summary = `This author rarely commits, but when they do, they drop a massive load-bearing commit containing over ${avgCommitSize} lines of code. It makes git diffs completely unreadable.`;
+      superlatives = ['Jenga Master', 'Mega Committer'];
+    } else if (prsOpened === 0 && commitsCount > 5) {
+      archetype = 'The Silent Git Anarchist';
+      summary = `Pushes commits straight to the main branch without any PR review. Code reviews are seen as an unnecessary speed bump. A lone wolf operating in the shadows.`;
+      superlatives = ['Direct Pusher', 'Git Rebel'];
+    }
+
+    const traits = [
+      {
+        name: 'Anxiety Factor',
+        score: Math.min(Math.round(fixRatio * 1.6), 100),
+        description: `With a bug-fix ratio of ${fixRatio.toFixed(0)}%, this developer is constantly fighting regressions.`
+      },
+      {
+        name: 'Test Discipline',
+        score: Math.min(Math.round(testRatio * 4.5), 100),
+        description: `With a test ratio of ${testRatio.toFixed(0)}%, writing tests is ${testRatio > 10 ? 'a high priority' : 'seen as a luxury'}.`
+      },
+      {
+        name: 'Chaos Score',
+        score: prsOpened === 0 ? 90 : Math.max(10, 100 - Math.round(testRatio * 2)),
+        description: prsOpened === 0 ? 'Pushes straight to main, inducing maximum anxiety.' : 'Submits code for review but keeps average commit size high.'
+      }
+    ];
+
+    const funFact = prsOpened === 0 && commitsCount > 0
+      ? 'Pushed directly to the main branch without ever opening a pull request.'
+      : `Pushes code primarily in ${lang} with a longest streak of ${c.streaks.longestStreak} days.`;
+
+    return {
+      username: c.username,
+      archetype,
+      summary,
+      traits,
+      superlatives,
+      funFact
+    };
+  });
+
+  return { contributors };
+}
+

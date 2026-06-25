@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -6,11 +7,14 @@ declare global {
 }
 
 function getPrisma(): PrismaClient {
+  const url = process.env.DATABASE_URL || 'file:./dev.db';
   if (process.env.NODE_ENV === 'production') {
-    return new PrismaClient();
+    const adapter = new PrismaBetterSqlite3({ url });
+    return new PrismaClient({ adapter });
   }
   if (!global.__prisma) {
-    global.__prisma = new PrismaClient();
+    const adapter = new PrismaBetterSqlite3({ url });
+    global.__prisma = new PrismaClient({ adapter });
   }
   return global.__prisma;
 }

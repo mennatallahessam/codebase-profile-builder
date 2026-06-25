@@ -9,8 +9,10 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@prisma/adapter-better-sqlite3": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "axios": "^1.18.0",
+    "better-sqlite3": "^12.11.1",
     "dotenv": "^17.4.2",
     "next": "16.2.9",
     "openai": "^6.43.0",

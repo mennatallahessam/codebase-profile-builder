@@ -1,5 +1,5 @@
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
 }
 
 generator client {
@@ -8,20 +8,56 @@ generator client {
 
 model Repository {
   @@unique([owner, name])
-  id        Int      @id @default(autoincrement())
-  owner     String
-  name      String
-  url       String
-  createdAt DateTime @default(now())
-  metrics   Metric[]
+  id           Int           @id @default(autoincrement())
+  owner        String
+  name         String
+  url          String
+  createdAt    DateTime      @default(now())
+  metrics      Metric[]
+  profileJson  Json?
+  metricsJson  Json?
+  healthJson   Json?
+  contributors Contributor[]
 }
 
 model Metric {
-  id           Int      @id @default(autoincrement())
+  id           Int        @id @default(autoincrement())
   repositoryId Int
   type         String
   value        Float
   detailsJson  Json?
-  createdAt    DateTime @default(now())
-  repository   Repository @relation(fields: [repositoryId], references: [id])
+  createdAt    DateTime   @default(now())
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
 }
+
+model Contributor {
+  id                 Int                 @id @default(autoincrement())
+  repositoryId       Int
+  username           String
+  avatarUrl          String?
+  displayName        String?
+  repository         Repository          @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  contributorMetrics ContributorMetric?
+  contributorProfile ContributorProfile?
+
+  @@unique([repositoryId, username])
+}
+
+model ContributorMetric {
+  id            Int         @id @default(autoincrement())
+  contributorId Int         @unique
+  detailsJson   Json
+  contributor   Contributor @relation(fields: [contributorId], references: [id], onDelete: Cascade)
+}
+
+model ContributorProfile {
+  id               Int         @id @default(autoincrement())
+  contributorId    Int         @unique
+  archetype        String
+  summary          String
+  traitsJson       Json
+  superlativesJson Json
+  funFact          String
+  contributor      Contributor @relation(fields: [contributorId], references: [id], onDelete: Cascade)
+}
+

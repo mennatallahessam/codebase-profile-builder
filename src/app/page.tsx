@@ -12,7 +12,17 @@ import {
   XAxis,
   YAxis,
   Tooltip,
+  PieChart,
+  Pie,
+  Cell,
+  AreaChart,
+  Area,
+  Legend,
 } from 'recharts';
+import Heatmap from '../components/Heatmap';
+import CollaborationGraph from '../components/CollaborationGraph';
+import Treemap from '../components/Treemap';
+
 
 interface Trait {
   name: string;
@@ -22,6 +32,7 @@ interface Trait {
 }
 
 interface AnalysisResult {
+  id: number;
   repository: {
     owner: string;
     name: string;
@@ -51,7 +62,18 @@ interface AnalysisResult {
     predictions: string[];
     shareableBadges: string[];
   };
+  health: {
+    riskScore: number;
+    riskReasons: string[];
+    hotspots: any[];
+    languages: { name: string; value: number }[];
+    dependencies: any[];
+  };
+  contributors: any[];
+  collaborationGraph: any[];
+  lastAnalyzed: string;
 }
+
 
 const SCAN_MESSAGES = [
   'Establishing secure connection with GitHub API API...',
@@ -76,8 +98,24 @@ export default function Home() {
   const [errorMsg, setErrorMsg] = useState('');
   const [logs, setLogs] = useState<string[]>([]);
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'traits' | 'metrics' | 'predictions'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'traits' | 'metrics' | 'predictions' | 'contributors' | 'health' | 'compare'>('overview');
   const [isMounted, setIsMounted] = useState(false);
+
+  // Track A: Contributor Intelligence state
+  const [selectedContributor, setSelectedContributor] = useState<any | null>(null);
+  const [contributorSort, setContributorSort] = useState<'commits' | 'lines' | 'chaos'>('commits');
+  const [contributorFilter, setContributorFilter] = useState<'all' | 'active'>('all');
+  const [selectedCompareUsers, setSelectedCompareUsers] = useState<string[]>([]);
+  const [showCompareUsersPanel, setShowCompareUsersPanel] = useState(false);
+
+  // Track B: Repo-to-repo comparison state
+  const [comparisonInput, setComparisonInput] = useState('');
+  const [comparisonStatus, setComparisonStatus] = useState<'idle' | 'scanning' | 'success' | 'error'>('idle');
+  const [comparisonErrorMsg, setComparisonErrorMsg] = useState('');
+  const [comparisonResult, setComparisonResult] = useState<AnalysisResult | null>(null);
+  const [comparisonLogs, setComparisonLogs] = useState<string[]>([]);
+  const comparisonLogIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
 
   const logEndRef = useRef<HTMLDivElement>(null);
   const logIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -145,12 +183,70 @@ export default function Home() {
     }
   };
 
+  const startComparisonScanningLogs = () => {
+    setComparisonLogs([]);
+    let index = 0;
+    setComparisonLogs([`[0.0s] ${SCAN_MESSAGES[0]}`]);
+
+    comparisonLogIntervalRef.current = setInterval(() => {
+      index++;
+      if (index < SCAN_MESSAGES.length) {
+        const elapsed = (index * 0.4).toFixed(1);
+        setComparisonLogs((prev) => [...prev, `[${elapsed}s] ${SCAN_MESSAGES[index]}`]);
+      } else {
+        if (comparisonLogIntervalRef.current) clearInterval(comparisonLogIntervalRef.current);
+      }
+    }, 450);
+  };
+
+  const handleComparisonAnalyze = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!comparisonInput.trim()) return;
+
+    setComparisonStatus('scanning');
+    setComparisonErrorMsg('');
+    startComparisonScanningLogs();
+
+    try {
+      const payload = comparisonInput.startsWith('http') ? { url: comparisonInput.trim() } : { repo: comparisonInput.trim() };
+      
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (comparisonLogIntervalRef.current) clearInterval(comparisonLogIntervalRef.current);
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to analyze repository');
+      }
+
+      setComparisonResult(data);
+      setComparisonStatus('success');
+    } catch (err: any) {
+      console.error(err);
+      setComparisonErrorMsg(err.message || 'Something went wrong while profiling the comparison codebase.');
+      setComparisonStatus('error');
+    }
+  };
+
   const resetSearch = () => {
     setInput('');
     setStatus('idle');
     setResult(null);
     setErrorMsg('');
     setLogs([]);
+    setSelectedContributor(null);
+    setComparisonInput('');
+    setComparisonResult(null);
+    setComparisonStatus('idle');
+    setComparisonErrorMsg('');
+    setComparisonLogs([]);
+    setSelectedCompareUsers([]);
+    setShowCompareUsersPanel(false);
   };
 
   // Safe formatting for ratios
@@ -434,6 +530,26 @@ export default function Home() {
                     Overview
                   </button>
                   <button
+                    onClick={() => { setSelectedContributor(null); setActiveTab('contributors'); }}
+                    className={`w-full py-2.5 px-4 rounded-xl font-medium text-sm text-left transition ${
+                      activeTab === 'contributors'
+                        ? 'bg-gradient-to-r from-indigo-500/10 to-purple-500/10 text-indigo-400 border border-indigo-500/20'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-900/40 border border-transparent'
+                    }`}
+                  >
+                    Contributors
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('health')}
+                    className={`w-full py-2.5 px-4 rounded-xl font-medium text-sm text-left transition ${
+                      activeTab === 'health'
+                        ? 'bg-gradient-to-r from-indigo-500/10 to-purple-500/10 text-indigo-400 border border-indigo-500/20'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-900/40 border border-transparent'
+                    }`}
+                  >
+                    Code Health & Risk
+                  </button>
+                  <button
                     onClick={() => setActiveTab('traits')}
                     className={`w-full py-2.5 px-4 rounded-xl font-medium text-sm text-left transition ${
                       activeTab === 'traits'
@@ -452,6 +568,16 @@ export default function Home() {
                     }`}
                   >
                     Metrics Dashboard
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('compare')}
+                    className={`w-full py-2.5 px-4 rounded-xl font-medium text-sm text-left transition ${
+                      activeTab === 'compare'
+                        ? 'bg-gradient-to-r from-indigo-500/10 to-purple-500/10 text-indigo-400 border border-indigo-500/20'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-900/40 border border-transparent'
+                    }`}
+                  >
+                    Compare Repos
                   </button>
                   <button
                     onClick={() => setActiveTab('predictions')}
@@ -551,6 +677,68 @@ export default function Home() {
                             </p>
                           </div>
                         ))}
+                      </div>
+                    </div>
+
+                    {/* Share & Embed Badge Controls */}
+                    <div className="bg-slate-950/40 border border-slate-900 rounded-2xl p-6 backdrop-blur-md space-y-6">
+                      <div>
+                        <h3 className="text-slate-350 text-sm font-semibold mb-2 font-mono uppercase tracking-wider">Public Permalink</h3>
+                        <p className="text-slate-400 text-xs mb-3">Share this exact profile report using a permanent read-only link:</p>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            readOnly
+                            value={typeof window !== 'undefined' ? `${window.location.origin}/report/${result.id}` : ''}
+                            className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-indigo-300 w-full focus:outline-none"
+                          />
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(`${window.location.origin}/report/${result.id}`);
+                              alert('Permalink copied to clipboard!');
+                            }}
+                            className="bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg px-4 py-2 text-xs text-slate-200 transition shrink-0"
+                          >
+                            Copy
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="border-t border-slate-900 pt-4">
+                        <h3 className="text-slate-350 text-sm font-semibold mb-2 font-mono uppercase tracking-wider">Embeddable README Badge</h3>
+                        <p className="text-slate-400 text-xs mb-3">Add this live status badge to your repository's README.md:</p>
+                        
+                        <div className="flex items-center gap-4 mb-3">
+                          <span className="text-xs text-slate-500 font-mono">Live Preview:</span>
+                          <img
+                            src={`/api/badge/${result.repository.owner}/${result.repository.name}`}
+                            alt="Status Badge"
+                            className="h-5"
+                          />
+                        </div>
+
+                        <div className="space-y-3">
+                          <div>
+                            <span className="text-[10px] text-slate-500 font-mono block mb-1">Markdown</span>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                readOnly
+                                value={typeof window !== 'undefined' ? `[![Codebase Profiler](${window.location.origin}/api/badge/${result.repository.owner}/${result.repository.name})](${window.location.origin}/report/${result.id})` : ''}
+                                className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-indigo-300 w-full focus:outline-none"
+                              />
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(`[![Codebase Profiler](${window.location.origin}/api/badge/${result.repository.owner}/${result.repository.name})](${window.location.origin}/report/${result.id})`);
+                                  alert('Markdown copied to clipboard!');
+                                }}
+                                className="bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg px-4 py-2 text-xs text-slate-200 transition shrink-0"
+                              >
+                                Copy
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -663,34 +851,903 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* TAB 4: PREDICTIONS */}
+                {/* TAB 4: PREDICTIONS & ROASTS */}
                 {activeTab === 'predictions' && (
-                  <div className="bg-slate-950/40 border border-slate-900 rounded-2xl p-6 backdrop-blur-md">
-                    <h3 className="text-slate-350 text-sm font-semibold mb-6 font-mono uppercase tracking-wider">
-                      AI-Driven predictions & Forecasts
-                    </h3>
-
-                    <div className="space-y-4">
-                      {result.profile.predictions.map((pred, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-start gap-4 p-4 rounded-xl border border-slate-900 bg-slate-950/50 hover:border-slate-850 transition duration-300"
-                        >
-                          <div className="p-1.5 bg-purple-500/10 border border-purple-500/20 text-purple-400 rounded-lg shrink-0 mt-0.5">
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                            </svg>
+                  <div className="space-y-6">
+                    <div className="bg-gradient-to-br from-indigo-950/40 via-slate-950/50 to-purple-950/40 border border-slate-900 rounded-2xl p-6 backdrop-blur-md">
+                      <div className="flex items-center gap-2 mb-4">
+                        <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+                        <h3 className="text-slate-350 text-sm font-semibold font-mono uppercase tracking-wider">AI Predictions & Future Roasts</h3>
+                      </div>
+                      <p className="text-slate-500 text-xs mb-6">Based on commit patterns, coding style, and developer personality metrics, the AI Oracle predicts the following futures for this codebase:</p>
+                      <div className="space-y-4">
+                        {result.profile.predictions.map((prediction, idx) => (
+                          <div
+                            key={idx}
+                            className="relative p-4 bg-slate-900/50 border border-slate-900 rounded-xl overflow-hidden group hover:border-slate-800 transition"
+                          >
+                            <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-indigo-500 via-purple-500 to-pink-500 rounded-l-xl" />
+                            <div className="pl-4">
+                              <div className="flex items-start gap-2">
+                                <span className="shrink-0 mt-0.5 font-mono text-[10px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1.5 py-0.5 rounded">
+                                  #{String(idx + 1).padStart(2, '0')}
+                                </span>
+                                <p className="text-slate-300 text-sm leading-relaxed">{prediction}</p>
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest font-bold">
-                              Forecast #{idx + 1}
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Shareable Badges */}
+                    <div className="bg-slate-950/40 border border-slate-900 rounded-2xl p-6 backdrop-blur-md">
+                      <h3 className="text-slate-350 text-sm font-semibold mb-4 font-mono uppercase tracking-wider">Achievement Badges Unlocked</h3>
+                      <div className="flex flex-wrap gap-3">
+                        {result.profile.shareableBadges.map((badge, idx) => {
+                          const colors = [
+                            'from-indigo-500/10 to-purple-500/10 border-indigo-500/20 text-indigo-300',
+                            'from-purple-500/10 to-pink-500/10 border-purple-500/20 text-purple-300',
+                            'from-pink-500/10 to-rose-500/10 border-pink-500/20 text-pink-300',
+                            'from-emerald-500/10 to-teal-500/10 border-emerald-500/20 text-emerald-300',
+                            'from-amber-500/10 to-yellow-500/10 border-amber-500/20 text-amber-300',
+                          ];
+                          const color = colors[idx % colors.length];
+                          return (
+                            <span
+                              key={idx}
+                              className={`px-4 py-2 rounded-xl border bg-gradient-to-r ${color} text-xs font-mono font-semibold tracking-wide`}
+                            >
+                              🏆 #{badge}
                             </span>
-                            <p className="text-slate-300 text-sm mt-1 leading-relaxed">
-                              {pred}
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Fun roast copy button */}
+                    <div className="bg-slate-950/40 border border-slate-900 rounded-2xl p-5 text-center">
+                      <p className="text-slate-500 text-xs mb-3">Export predictions for your team standup or post on your README:</p>
+                      <button
+                        onClick={() => {
+                          const text = `🔮 AI Predictions for ${result.repository.owner}/${result.repository.name} (${result.profile.archetype}):\n\n${result.profile.predictions.map((p, i) => `${i + 1}. ${p}`).join('\n')}`;
+                          navigator.clipboard.writeText(text);
+                          alert('Predictions copied to clipboard!');
+                        }}
+                        className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-semibold text-xs rounded-lg px-5 py-2.5 hover:shadow-lg hover:shadow-purple-500/20 active:scale-[0.98] transition"
+                      >
+                        Copy All Predictions
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+
+                {/* TAB 5: CONTRIBUTORS */}
+                {activeTab === 'contributors' && (
+                  <div className="space-y-8">
+                    {!selectedContributor ? (
+                      <>
+                        {/* Leaderboards and Bus Factor Explorer */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          {/* Leaderboards Panel */}
+                          <div className="bg-slate-950/40 border border-slate-900 rounded-2xl p-6 backdrop-blur-md">
+                            <h3 className="text-slate-350 text-sm font-semibold mb-4 font-mono uppercase tracking-wider">
+                              Team Leaderboards
+                            </h3>
+                            <div className="space-y-4">
+                              {/* Most Commits */}
+                              <div>
+                                <span className="text-[10px] text-slate-500 font-mono block mb-2">MOST COMMITS</span>
+                                <div className="space-y-1.5">
+                                  {result.contributors.slice(0, 3).map((c, i) => (
+                                    <div key={i} className="flex justify-between items-center text-xs bg-slate-900/40 border border-slate-900 px-3 py-1.5 rounded-lg">
+                                      <span className="text-slate-300 font-mono">#{i+1} {c.username}</span>
+                                      <span className="font-bold text-indigo-400">{c.commitsCount} commits</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              
+                              {/* Longest Streak */}
+                              <div>
+                                <span className="text-[10px] text-slate-500 font-mono block mb-2">LONGEST STREAK</span>
+                                <div className="space-y-1.5">
+                                  {[...result.contributors]
+                                    .sort((a, b) => b.streaks.longestStreak - a.streaks.longestStreak)
+                                    .slice(0, 3)
+                                    .map((c, i) => (
+                                      <div key={i} className="flex justify-between items-center text-xs bg-slate-900/40 border border-slate-900 px-3 py-1.5 rounded-lg">
+                                        <span className="text-slate-300 font-mono">#{i+1} {c.username}</span>
+                                        <span className="font-bold text-purple-400">{c.streaks.longestStreak} days</span>
+                                      </div>
+                                    ))}
+                                </div>
+                              </div>
+
+                              {/* PR Speed */}
+                              <div>
+                                <span className="text-[10px] text-slate-500 font-mono block mb-2">FASTEST PR MERGER</span>
+                                <div className="space-y-1.5">
+                                  {[...result.contributors]
+                                    .filter(c => c.prsMerged > 0)
+                                    .sort((a, b) => a.averageTimeToMerge - b.averageTimeToMerge)
+                                    .slice(0, 3)
+                                    .map((c, i) => (
+                                      <div key={i} className="flex justify-between items-center text-xs bg-slate-900/40 border border-slate-900 px-3 py-1.5 rounded-lg">
+                                        <span className="text-slate-300 font-mono">#{i+1} {c.username}</span>
+                                        <span className="font-bold text-emerald-400">{c.averageTimeToMerge} hrs avg</span>
+                                      </div>
+                                    ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Bus Factor Explorer Chart */}
+                          <div className="bg-slate-950/40 border border-slate-900 rounded-2xl p-6 backdrop-blur-md">
+                            <h3 className="text-slate-350 text-sm font-semibold mb-2 font-mono uppercase tracking-wider">
+                              Commit Share Concentration
+                            </h3>
+                            <p className="text-slate-500 text-[10px] mb-4">
+                              Cumulative percentage of commits owned by ranked contributors. Steeper curves indicate higher concentration of code knowledge.
+                            </p>
+                            <div className="h-48 w-full">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart
+                                  data={(() => {
+                                    let sum = 0;
+                                    const total = result.contributors.reduce((acc, c) => acc + c.commitsCount, 0) || 1;
+                                    return result.contributors.map((c, idx) => {
+                                      sum += c.commitsCount;
+                                      return {
+                                        rank: `#${idx + 1}`,
+                                        name: c.username,
+                                        Cumulative: parseFloat(((sum / total) * 100).toFixed(1)),
+                                      };
+                                    });
+                                  })()}
+                                >
+                                  <XAxis dataKey="rank" stroke="#64748b" fontSize={10} tickLine={false} />
+                                  <YAxis stroke="#64748b" fontSize={10} tickLine={false} unit="%" />
+                                  <Tooltip
+                                    contentStyle={{
+                                      backgroundColor: '#0f172a',
+                                      borderColor: '#1e293b',
+                                      borderRadius: '12px',
+                                      color: '#e2e8f0',
+                                    }}
+                                  />
+                                  <Area type="monotone" dataKey="Cumulative" stroke="#a855f7" fill="#a855f7" fillOpacity={0.15} />
+                                </AreaChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Filter & Sort Controls */}
+                        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-950/20 border border-slate-900 rounded-2xl p-4 backdrop-blur-md">
+                          <div className="flex flex-wrap gap-2 items-center">
+                            <span className="text-slate-500 text-xs font-mono">Sort by:</span>
+                            <button
+                              onClick={() => setContributorSort('commits')}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                                contributorSort === 'commits' ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/20' : 'bg-slate-900 border border-slate-800 text-slate-400'
+                              }`}
+                            >
+                              Commits
+                            </button>
+                            <button
+                              onClick={() => setContributorSort('lines')}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                                contributorSort === 'lines' ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/20' : 'bg-slate-900 border border-slate-800 text-slate-400'
+                              }`}
+                            >
+                              Lines Changed
+                            </button>
+                            <button
+                              onClick={() => setContributorSort('chaos')}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                                contributorSort === 'chaos' ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/20' : 'bg-slate-900 border border-slate-800 text-slate-400'
+                              }`}
+                            >
+                              Chaos Score
+                            </button>
+                          </div>
+
+                          {/* Head to Head Compare Toggle */}
+                          {selectedCompareUsers.length >= 2 && (
+                            <button
+                              onClick={() => setShowCompareUsersPanel(true)}
+                              className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white text-xs font-semibold rounded-lg px-4 py-2 hover:shadow-lg transition active:scale-[0.98]"
+                            >
+                              Compare Selected ({selectedCompareUsers.length})
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Head to Head Comparison Dashboard Overlay Modal */}
+                        {showCompareUsersPanel && (
+                          <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
+                            <div className="bg-slate-950 border border-slate-900 rounded-3xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto space-y-6">
+                              <div className="flex justify-between items-center border-b border-slate-900 pb-4">
+                                <h2 className="text-xl font-bold text-slate-200 font-[family-name:var(--font-space-grotesk)]">
+                                  Head-to-Head Developer Compare
+                                </h2>
+                                <button
+                                  onClick={() => setShowCompareUsersPanel(false)}
+                                  className="text-slate-400 hover:text-white"
+                                >
+                                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Radar Chart Comparing Overlay */}
+                                <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-6">
+                                  <h3 className="text-slate-350 text-sm font-semibold mb-4 font-mono uppercase tracking-wider text-center">Overlay Trait Radar</h3>
+                                  <div className="h-64 flex items-center justify-center">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                      <RadarChart cx="50%" cy="50%" outerRadius="70%" data={(() => {
+                                        const traitNames = ['Anxiety Factor', 'Test Discipline', 'Chaos Score'];
+                                        return traitNames.map((name) => {
+                                          const row: any = { subject: name };
+                                          selectedCompareUsers.forEach((username) => {
+                                            const uObj = result.contributors.find(c => c.username === username);
+                                            if (uObj) {
+                                              const tVal = uObj.profile.traits.find((t: any) => t.name === name)?.score ?? 50;
+                                              row[username] = tVal;
+                                            }
+                                          });
+                                          return row;
+                                        });
+                                      })()}>
+                                        <PolarGrid stroke="#1e293b" />
+                                        <PolarAngleAxis dataKey="subject" stroke="#94a3b8" fontSize={9} />
+                                        {selectedCompareUsers.map((username, idx) => {
+                                          const colors = ['#8b5cf6', '#3b82f6', '#ec4899', '#10b981'];
+                                          const color = colors[idx % colors.length];
+                                          return (
+                                            <Radar
+                                              key={username}
+                                              name={username}
+                                              dataKey={username}
+                                              stroke={color}
+                                              fill={color}
+                                              fillOpacity={0.15}
+                                            />
+                                          );
+                                        })}
+                                        <Legend />
+                                      </RadarChart>
+                                    </ResponsiveContainer>
+                                  </div>
+                                </div>
+
+                                {/* Comparison Stats Table */}
+                                <div className="space-y-4">
+                                  <h3 className="text-slate-350 text-sm font-semibold mb-4 font-mono uppercase tracking-wider">Key Stats Comparison</h3>
+                                  <div className="overflow-x-auto border border-slate-900 rounded-xl">
+                                    <table className="w-full text-left border-collapse text-xs">
+                                      <thead>
+                                        <tr className="bg-slate-900 text-slate-400 border-b border-slate-800">
+                                          <th className="p-3">Contributor</th>
+                                          <th className="p-3 text-right">Commits</th>
+                                          <th className="p-3 text-right">Net Lines</th>
+                                          <th className="p-3 text-right">Streak (Days)</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {selectedCompareUsers.map((username) => {
+                                          const c = result.contributors.find(x => x.username === username);
+                                          if (!c) return null;
+                                          return (
+                                            <tr key={username} className="border-b border-slate-900 hover:bg-slate-900/20">
+                                              <td className="p-3 font-semibold text-slate-200">{username}</td>
+                                              <td className="p-3 text-right text-indigo-400">{c.commitsCount}</td>
+                                              <td className="p-3 text-right text-purple-400">{c.netLines}</td>
+                                              <td className="p-3 text-right text-pink-400">{c.streaks.longestStreak}</td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Contributors Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                          {[...result.contributors]
+                            .sort((a, b) => {
+                              if (contributorSort === 'lines') return b.netLines - a.netLines;
+                              if (contributorSort === 'chaos') {
+                                const aChaos = a.profile.traits.find((t: any) => t.name === 'Chaos Score')?.score ?? 0;
+                                const bChaos = b.profile.traits.find((t: any) => t.name === 'Chaos Score')?.score ?? 0;
+                                return bChaos - aChaos;
+                              }
+                              return b.commitsCount - a.commitsCount;
+                            })
+                            .map((c) => {
+                              const isChecked = selectedCompareUsers.includes(c.username);
+                              const chaos = c.profile.traits.find((t: any) => t.name === 'Chaos Score')?.score ?? 35;
+                              return (
+                                <div
+                                  key={c.username}
+                                  className="relative group bg-slate-950/40 border border-slate-900 hover:border-slate-800 rounded-2xl p-5 backdrop-blur-md transition flex flex-col justify-between"
+                                >
+                                  {/* Compare Checkbox */}
+                                  <div className="absolute top-4 right-4 flex items-center gap-1.5 z-10">
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => {
+                                        if (isChecked) {
+                                          setSelectedCompareUsers(prev => prev.filter(u => u !== c.username));
+                                        } else {
+                                          setSelectedCompareUsers(prev => [...prev, c.username]);
+                                        }
+                                      }}
+                                      className="rounded bg-slate-900 border-slate-800 text-purple-600 focus:ring-purple-500 h-4 w-4 cursor-pointer"
+                                    />
+                                    <span className="text-[9px] text-slate-500 font-mono">Compare</span>
+                                  </div>
+
+                                  <div className="cursor-pointer" onClick={() => setSelectedContributor(c)}>
+                                    <div className="flex items-center gap-3.5 mb-4">
+                                      <div className="w-12 h-12 rounded-xl bg-slate-900 overflow-hidden border border-slate-800 shrink-0">
+                                        {c.avatarUrl ? (
+                                          <img src={c.avatarUrl} alt={c.username} className="w-full h-full object-cover" />
+                                        ) : (
+                                          <div className="w-full h-full flex items-center justify-center bg-indigo-950 text-indigo-300 font-bold text-lg font-mono">
+                                            {c.username.slice(0, 2).toUpperCase()}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div>
+                                        <h4 className="font-bold text-slate-200 leading-snug">{c.displayName}</h4>
+                                        <span className="text-xs text-indigo-400 font-mono">@{c.username}</span>
+                                      </div>
+                                    </div>
+
+                                    <div className="mb-4">
+                                      <span className="text-[9px] font-mono tracking-widest uppercase bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded-full">
+                                        {c.profile.archetype}
+                                      </span>
+                                      <p className="text-slate-400 text-xs mt-2.5 line-clamp-2 leading-relaxed">
+                                        {c.profile.summary}
+                                      </p>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-3 gap-2 text-center bg-slate-900/35 border border-slate-900 rounded-xl p-2.5 text-xs font-mono">
+                                      <div>
+                                        <span className="text-[8px] text-slate-500 block uppercase">Commits</span>
+                                        <span className="font-bold text-slate-300">{c.commitsCount}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-[8px] text-slate-500 block uppercase">Lines</span>
+                                        <span className="font-bold text-slate-300">{c.netLines}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-[8px] text-slate-500 block uppercase">Chaos</span>
+                                        <span className={`font-bold ${chaos > 70 ? 'text-red-400' : 'text-emerald-400'}`}>{chaos}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </>
+                    ) : (
+                      /* Expanded Contributor detailed profile view */
+                      <div className="space-y-6">
+                        <button
+                          onClick={() => setSelectedContributor(null)}
+                          className="flex items-center gap-1.5 text-xs font-mono text-slate-400 hover:text-white bg-slate-900/80 border border-slate-800 rounded-lg px-3 py-1.5 transition"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                          </svg>
+                          <span>Back to Team list</span>
+                        </button>
+
+                        {/* Detailed Contributor Hero Card */}
+                        <div className="relative overflow-hidden bg-gradient-to-br from-indigo-950/50 via-slate-950/60 to-purple-950/50 border border-slate-900 rounded-3xl p-6 md:p-8 shadow-xl">
+                          <div className="relative flex flex-col md:flex-row gap-6 items-center">
+                            <div className="w-24 h-24 rounded-2xl bg-slate-900 overflow-hidden border border-slate-800 shrink-0">
+                              {selectedContributor.avatarUrl ? (
+                                <img src={selectedContributor.avatarUrl} alt={selectedContributor.username} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-indigo-950 text-indigo-300 font-bold text-3xl font-mono">
+                                  {selectedContributor.username.slice(0, 2).toUpperCase()}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex-grow text-center md:text-left space-y-3">
+                              <div>
+                                <span className="px-2.5 py-0.5 rounded-full text-[9px] font-mono tracking-widest uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                                  {selectedContributor.profile.archetype}
+                                </span>
+                                <h1 className="text-3xl font-extrabold tracking-tight mt-2 text-slate-200 font-[family-name:var(--font-space-grotesk)]">
+                                  {selectedContributor.displayName}
+                                </h1>
+                                <span className="text-sm font-mono text-slate-500">@{selectedContributor.username}</span>
+                              </div>
+
+                              <p className="text-slate-350 text-sm leading-relaxed max-w-2xl">
+                                {selectedContributor.profile.summary}
+                              </p>
+
+                              <div className="flex flex-wrap justify-center md:justify-start gap-2 pt-1">
+                                {selectedContributor.profile.superlatives.map((badge: string, idx: number) => (
+                                  <span key={idx} className="px-2.5 py-1 rounded-md border border-slate-800 bg-slate-950/45 text-slate-400 text-[10px] font-mono">
+                                    # {badge}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Specific Metrics Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          <div className="bg-slate-950/40 border border-slate-900 rounded-2xl p-5 backdrop-blur-md">
+                            <span className="text-slate-500 text-[9px] block uppercase font-mono tracking-wider mb-1">Commit Volume</span>
+                            <h4 className="text-2xl font-bold text-indigo-400">{selectedContributor.commitsCount} commits</h4>
+                            <p className="text-slate-500 text-[10px] mt-2 leading-relaxed">
+                              Represents this developer's total share of changes. Avg size: {selectedContributor.averageCommitSize} changes.
+                            </p>
+                          </div>
+                          
+                          <div className="bg-slate-950/40 border border-slate-900 rounded-2xl p-5 backdrop-blur-md">
+                            <span className="text-slate-500 text-[9px] block uppercase font-mono tracking-wider mb-1">Net Code Additions</span>
+                            <h4 className="text-2xl font-bold text-purple-400">{selectedContributor.netLines} lines</h4>
+                            <p className="text-slate-500 text-[10px] mt-2 leading-relaxed">
+                              Additions: {selectedContributor.additions} | Deletions: {selectedContributor.deletions}.
+                            </p>
+                          </div>
+
+                          <div className="bg-slate-950/40 border border-slate-900 rounded-2xl p-5 backdrop-blur-md">
+                            <span className="text-slate-500 text-[9px] block uppercase font-mono tracking-wider mb-1">Longest Commit Streak</span>
+                            <h4 className="text-2xl font-bold text-pink-400">{selectedContributor.streaks.longestStreak} days</h4>
+                            <p className="text-slate-500 text-[10px] mt-2 leading-relaxed">
+                              Current streak: {selectedContributor.streaks.currentStreak} days. Most active day: {selectedContributor.mostActiveDay.count} pushes.
                             </p>
                           </div>
                         </div>
-                      ))}
+
+                        {/* Contribution Charts */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* Trait Radar */}
+                          <div className="bg-slate-950/40 border border-slate-900 rounded-2xl p-6 backdrop-blur-md">
+                            <h3 className="text-slate-350 text-sm font-semibold mb-4 font-mono uppercase tracking-wider">Personal Traits</h3>
+                            <div className="h-60 flex items-center justify-center">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <RadarChart cx="50%" cy="50%" outerRadius="70%" data={selectedContributor.profile.traits.map((t: any) => ({ subject: t.name, score: t.score }))}>
+                                  <PolarGrid stroke="#1e293b" />
+                                  <PolarAngleAxis dataKey="subject" stroke="#94a3b8" fontSize={9} />
+                                  <Radar name="Score" dataKey="score" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.3} />
+                                </RadarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </div>
+
+                          {/* Commit Categories Pie */}
+                          <div className="bg-slate-950/40 border border-slate-900 rounded-2xl p-6 backdrop-blur-md">
+                            <h3 className="text-slate-350 text-sm font-semibold mb-4 font-mono uppercase tracking-wider">Commit Types</h3>
+                            <div className="h-60 flex items-center justify-center">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                  <Pie
+                                    data={[
+                                      { name: 'Features', value: selectedContributor.ratios.feature },
+                                      { name: 'Fixes', value: selectedContributor.ratios.fix },
+                                      { name: 'Refactors', value: selectedContributor.ratios.refactor },
+                                      { name: 'Tests', value: selectedContributor.ratios.test },
+                                    ].filter(x => x.value > 0)}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={50}
+                                    outerRadius={75}
+                                    paddingAngle={3}
+                                    dataKey="value"
+                                    label={({ name, percent }) => `${name} (${((percent ?? 0) * 100).toFixed(0)}%)`}
+                                  >
+                                    <Cell fill="#3b82f6" />
+                                    <Cell fill="#ef4444" />
+                                    <Cell fill="#a855f7" />
+                                    <Cell fill="#10b981" />
+                                  </Pie>
+                                </PieChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Heatmap Activity Grid */}
+                        <Heatmap data={selectedContributor.heatmap} />
+
+                        {/* Personal Time of Day Comparison */}
+                        <div className="bg-slate-950/40 border border-slate-900 rounded-2xl p-6 backdrop-blur-md">
+                          <h3 className="text-slate-350 text-sm font-semibold mb-4 font-mono uppercase tracking-wider">
+                            Time-of-day distribution vs Team wide
+                          </h3>
+                          <div className="h-60 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart
+                                data={selectedContributor.timeOfDay.map((t: any) => {
+                                  const repoPercent = result.metrics.timeOfDay.find(x => x.period.toLowerCase().includes(t.period.split(' ')[0].toLowerCase()))?.percent ?? 0;
+                                  return {
+                                    name: t.period.split(' ')[0],
+                                    Author: parseFloat(t.percent.toFixed(1)),
+                                    RepoWide: parseFloat(repoPercent.toFixed(1)),
+                                  };
+                                })}
+                              >
+                                <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
+                                <YAxis stroke="#64748b" fontSize={11} axisLine={false} />
+                                <Tooltip
+                                  contentStyle={{
+                                    backgroundColor: '#0f172a',
+                                    borderColor: '#1e293b',
+                                    color: '#e2e8f0',
+                                    borderRadius: '12px',
+                                  }}
+                                />
+                                <Legend />
+                                <Bar dataKey="Author" fill="#a855f7" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="RepoWide" fill="#475569" radius={[4, 4, 0, 0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+
+                        {/* Network graph context callout */}
+                        <CollaborationGraph
+                          edges={result.collaborationGraph}
+                          contributors={result.contributors}
+                          highlightUser={selectedContributor.username}
+                        />
+
+                        {/* Copy/Share Roast controls */}
+                        <div className="bg-slate-950/40 border border-slate-900 rounded-2xl p-5 text-center max-w-2xl mx-auto space-y-4">
+                          <h3 className="font-bold text-slate-200">Roast this contributor</h3>
+                          <p className="text-slate-500 text-xs">Copy their generated AI summary profile to share on your Slack channel or Twitter.</p>
+                          <div className="flex justify-center gap-2">
+                            <button
+                              onClick={() => {
+                                const text = `Developer profile of ${selectedContributor.displayName} (@${selectedContributor.username}) on "${result.repository.owner}/${result.repository.name}": Identified as: ${selectedContributor.profile.archetype}! 🤖\n"${selectedContributor.profile.summary}"`;
+                                navigator.clipboard.writeText(text);
+                                alert('Copied developer roast to clipboard!');
+                              }}
+                              className="bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 text-xs text-slate-300 hover:text-white active:scale-[0.98] transition"
+                            >
+                              Copy Roast Text
+                            </button>
+                            <button
+                              onClick={() => {
+                                const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+                                  `My profile on ${result.repository.owner}/${result.repository.name} was identified as: ${selectedContributor.profile.archetype} (${selectedContributor.profile.superlatives.join(', ')}). Check yours out! 🚀`
+                                )}`;
+                                window.open(tweetUrl, '_blank');
+                              }}
+                              className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white text-xs font-semibold rounded-lg px-4 py-2 hover:shadow-lg transition active:scale-[0.98]"
+                            >
+                              Share on X
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* TAB 6: CODE HEALTH & RISK */}
+                {activeTab === 'health' && result.health && (
+                  <div className="space-y-8">
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+                      {/* Overall Risk Score Circular Gauge */}
+                      <div className="md:col-span-5 bg-slate-950/40 border border-slate-900 rounded-2xl p-6 backdrop-blur-md flex flex-col items-center justify-center">
+                        <h3 className="text-slate-350 text-sm font-semibold mb-4 font-mono uppercase tracking-wider text-center">
+                          Overall Risk Score
+                        </h3>
+                        
+                        <div className="relative flex items-center justify-center h-48 w-48 mb-4">
+                          <svg className="w-full h-full transform -rotate-90">
+                            <circle
+                              cx="96"
+                              cy="96"
+                              r="80"
+                              stroke="#1e293b"
+                              strokeWidth="12"
+                              fill="transparent"
+                            />
+                            <circle
+                              cx="96"
+                              cy="96"
+                              r="80"
+                              stroke={result.health.riskScore > 65 ? '#ef4444' : result.health.riskScore > 35 ? '#f59e0b' : '#10b981'}
+                              strokeWidth="12"
+                              fill="transparent"
+                              strokeDasharray={2 * Math.PI * 80}
+                              strokeDashoffset={2 * Math.PI * 80 * (1 - result.health.riskScore / 100)}
+                              strokeLinecap="round"
+                              className="transition-all duration-1000"
+                            />
+                          </svg>
+                          <div className="absolute text-center">
+                            <span className="text-5xl font-extrabold text-white">{result.health.riskScore}</span>
+                            <span className="text-[10px] text-slate-500 block uppercase font-mono mt-1">out of 100</span>
+                          </div>
+                        </div>
+
+                        <div className="text-center space-y-2 mt-2">
+                          <span className={`px-2 py-0.5 rounded text-xs font-bold font-mono ${
+                            result.health.riskScore > 65 ? 'bg-red-500/10 text-red-400 border border-red-500/20' : result.health.riskScore > 35 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                          }`}>
+                            {result.health.riskScore > 65 ? 'HIGH RISK' : result.health.riskScore > 35 ? 'MEDIUM RISK' : 'LOW RISK'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Risk factors list */}
+                      <div className="md:col-span-7 bg-slate-950/40 border border-slate-900 rounded-2xl p-6 backdrop-blur-md">
+                        <h3 className="text-slate-350 text-sm font-semibold mb-4 font-mono uppercase tracking-wider">
+                          Key Risk Factors
+                        </h3>
+                        <div className="space-y-3">
+                          {result.health.riskReasons.map((reason, idx) => (
+                            <div key={idx} className="flex gap-2.5 items-start p-3 bg-slate-900/40 border border-slate-900 rounded-xl text-xs">
+                              <span className="shrink-0 mt-0.5">
+                                <svg className={`w-4 h-4 ${result.health.riskScore > 50 ? 'text-amber-500' : 'text-indigo-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                              </span>
+                              <span className="text-slate-300 leading-normal">{reason}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Churn Treemap */}
+                    <Treemap data={result.health.hotspots} />
+
+                    {/* Growth Timeline Chart */}
+                    <div className="bg-slate-950/40 border border-slate-900 rounded-2xl p-6 backdrop-blur-md">
+                      <h3 className="text-slate-350 text-sm font-semibold mb-2 font-mono uppercase tracking-wider">
+                        Repository Codebase Growth Timeline
+                      </h3>
+                      <p className="text-slate-500 text-[10px] mb-4">
+                        Weekly commit activity tracking project development velocity.
+                      </p>
+                      <div className="h-64 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={result.metrics.commitFrequency.perWeek.slice(-18)}>
+                            <XAxis dataKey="week" stroke="#64748b" fontSize={10} tickLine={false} />
+                            <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: '#0f172a',
+                                borderColor: '#1e293b',
+                                color: '#e2e8f0',
+                                borderRadius: '12px',
+                              }}
+                            />
+                            <Area type="monotone" dataKey="count" stroke="#6366f1" fill="#6366f1" fillOpacity={0.15} name="Commits" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Dependency Manifest List */}
+                    <div className="bg-slate-950/40 border border-slate-900 rounded-2xl p-6 backdrop-blur-md">
+                      <div className="flex justify-between items-center mb-4">
+                        <div>
+                          <h3 className="text-slate-350 text-sm font-semibold font-mono uppercase tracking-wider">
+                            Codebase Manifest Dependencies
+                          </h3>
+                          <span className="text-[10px] text-slate-500 font-mono">
+                            Showing packages parsed from manifest files (e.g. package.json).
+                          </span>
+                        </div>
+                        {result.health.dependencies.length > 0 && (
+                          <span className="bg-slate-900 border border-slate-800 text-[10px] px-2.5 py-1 rounded font-mono text-slate-400">
+                            {result.health.dependencies.length} packages
+                          </span>
+                        )}
+                      </div>
+
+                      {result.health.dependencies.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                          {result.health.dependencies.slice(0, 36).map((dep, idx) => (
+                            <div
+                              key={idx}
+                              className={`flex justify-between items-center px-3 py-2 bg-slate-900/35 border rounded-xl text-xs ${
+                                dep.isStale ? 'border-red-900/40 hover:border-red-800/40 bg-red-950/5' : 'border-slate-900 hover:border-slate-800'
+                              }`}
+                            >
+                              <div>
+                                <span className={`font-semibold block ${dep.isStale ? 'text-red-300' : 'text-slate-300'}`}>{dep.name}</span>
+                                <span className="text-[9px] text-slate-500 font-mono">{dep.isDev ? 'devDependencies' : 'dependencies'}</span>
+                              </div>
+                              <span className={`font-mono text-[10px] px-2 py-0.5 rounded ${dep.isStale ? 'bg-red-500/10 text-red-400' : 'bg-slate-800 text-slate-400'}`}>
+                                {dep.version}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-6 text-slate-550 text-xs font-mono">
+                          No package.json manifest dependencies found in this repository.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 7: COMPARE REPOS */}
+                {activeTab === 'compare' && (
+                  <div className="space-y-8">
+                    {/* Input card for second repository */}
+                    <div className="bg-slate-950/40 border border-slate-900 rounded-3xl p-6 backdrop-blur-md">
+                      <h3 className="text-slate-200 font-bold mb-2 font-[family-name:var(--font-space-grotesk)]">
+                        Compare Repo with Another Public Codebase
+                      </h3>
+                      <p className="text-slate-500 text-xs mb-5">
+                        Compare commit activity ratios, developer anxiety levels, bus factors, and overall metrics side-by-side.
+                      </p>
+
+                      {comparisonStatus === 'idle' && (
+                        <form onSubmit={handleComparisonAnalyze} className="relative max-w-xl">
+                          <div className="relative group">
+                            <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-xl opacity-25 blur group-hover:opacity-45 transition duration-1000" />
+                            <div className="relative flex items-center bg-slate-900/90 border border-slate-800 rounded-xl p-2">
+                              <input
+                                type="text"
+                                value={comparisonInput}
+                                onChange={(e) => setComparisonInput(e.target.value)}
+                                placeholder="e.g. vercel/next.js or https://github.com/vercel/next.js"
+                                className="w-full bg-transparent text-slate-100 placeholder-slate-500 pl-3 pr-2 py-2 focus:outline-none text-xs md:text-sm"
+                                required
+                              />
+                              <button
+                                type="submit"
+                                className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-medium text-xs rounded-lg px-4 py-2.5 hover:shadow-lg active:scale-[0.98] transition shrink-0"
+                              >
+                                Compare
+                              </button>
+                            </div>
+                          </div>
+                        </form>
+                      )}
+
+                      {/* Loading status */}
+                      {comparisonStatus === 'scanning' && (
+                        <div className="w-full max-w-lg bg-black/60 border border-slate-900 rounded-xl p-4 font-mono text-xs text-indigo-400 space-y-2">
+                          {comparisonLogs.slice(-4).map((log, i) => (
+                            <div key={i} className="leading-relaxed">
+                              <span className="text-slate-600 mr-2">&gt;&gt;</span>
+                              {log}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Error state */}
+                      {comparisonStatus === 'error' && (
+                        <div className="space-y-4">
+                          <div className="text-xs text-red-400 bg-red-950/15 border border-red-900/30 p-3 rounded-lg font-mono">
+                            {comparisonErrorMsg || 'Failed to retrieve comparison repository.'}
+                          </div>
+                          <button
+                            onClick={() => setComparisonStatus('idle')}
+                            className="bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs px-3 py-1.5 rounded-lg border border-slate-800"
+                          >
+                            Try Again
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Success comparison screen */}
+                      {comparisonStatus === 'success' && comparisonResult && (
+                        <div className="pt-4 border-t border-slate-900 space-y-6">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs font-mono text-slate-500">
+                              COMPARING WITH: <span className="text-indigo-400">@{comparisonResult.repository.owner}/{comparisonResult.repository.name}</span>
+                            </span>
+                            <button
+                              onClick={() => {
+                                setComparisonResult(null);
+                                setComparisonStatus('idle');
+                                setComparisonInput('');
+                              }}
+                              className="text-xs font-mono text-red-400 hover:underline"
+                            >
+                              Reset Comparison
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Overlay Trait Radar */}
+                            <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-6">
+                              <h3 className="text-slate-350 text-sm font-semibold mb-4 font-mono uppercase tracking-wider text-center">
+                                Repo Archetype traits
+                              </h3>
+                              <div className="h-60 flex items-center justify-center">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <RadarChart cx="50%" cy="50%" outerRadius="70%" data={result.profile.traits.map((t, idx) => {
+                                    const compTrait = comparisonResult.profile.traits.find(x => x.name.toLowerCase().includes(t.name.split(' ')[0].toLowerCase()))?.score ?? 50;
+                                    return {
+                                      subject: t.name.split(' ')[0],
+                                      [result.repository.name]: t.score,
+                                      [comparisonResult.repository.name]: compTrait,
+                                    };
+                                  })}>
+                                    <PolarGrid stroke="#1e293b" />
+                                    <PolarAngleAxis dataKey="subject" stroke="#94a3b8" fontSize={9} />
+                                    <Radar name={result.repository.name} dataKey={result.repository.name} stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.15} />
+                                    <Radar name={comparisonResult.repository.name} dataKey={comparisonResult.repository.name} stroke="#ec4899" fill="#ec4899" fillOpacity={0.15} />
+                                    <Legend />
+                                  </RadarChart>
+                                </ResponsiveContainer>
+                              </div>
+                            </div>
+
+                            {/* Stat comparison table */}
+                            <div className="space-y-4">
+                              <h3 className="text-slate-350 text-sm font-semibold font-mono uppercase tracking-wider">
+                                Metrics Matrix Comparison
+                              </h3>
+                              <div className="overflow-hidden border border-slate-900 rounded-xl">
+                                <table className="w-full text-left border-collapse text-xs">
+                                  <thead>
+                                    <tr className="bg-slate-900 text-slate-400 border-b border-slate-800">
+                                      <th className="p-3">Metrics Parameter</th>
+                                      <th className="p-3 text-right">{result.repository.name}</th>
+                                      <th className="p-3 text-right">{comparisonResult.repository.name}</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    <tr className="border-b border-slate-900">
+                                      <td className="p-3 font-semibold text-slate-300">Archetype</td>
+                                      <td className="p-3 text-right text-indigo-400">{result.profile.archetype}</td>
+                                      <td className="p-3 text-right text-pink-400">{comparisonResult.profile.archetype}</td>
+                                    </tr>
+                                    <tr className="border-b border-slate-900">
+                                      <td className="p-3 font-semibold text-slate-300">Stars Count</td>
+                                      <td className="p-3 text-right text-yellow-500 font-mono">{result.repository.stars ?? 0}</td>
+                                      <td className="p-3 text-right text-yellow-500 font-mono">{comparisonResult.repository.stars ?? 0}</td>
+                                    </tr>
+                                    <tr className="border-b border-slate-900">
+                                      <td className="p-3 font-semibold text-slate-300">Bus Factor</td>
+                                      <td className="p-3 text-right font-mono">{result.metrics.busFactor}</td>
+                                      <td className="p-3 text-right font-mono">{comparisonResult.metrics.busFactor}</td>
+                                    </tr>
+                                    <tr className="border-b border-slate-900">
+                                      <td className="p-3 font-semibold text-slate-300">Developer Anxiety (Fix Ratio)</td>
+                                      <td className="p-3 text-right font-mono">{result.metrics.ratios.fix.toFixed(0)}%</td>
+                                      <td className="p-3 text-right font-mono">{comparisonResult.metrics.ratios.fix.toFixed(0)}%</td>
+                                    </tr>
+                                    <tr className="border-b border-slate-900">
+                                      <td className="p-3 font-semibold text-slate-300">Collaboration Index</td>
+                                      <td className="p-3 text-right font-mono">{result.metrics.collaborationIndex.toFixed(2)}</td>
+                                      <td className="p-3 text-right font-mono">{comparisonResult.metrics.collaborationIndex.toFixed(2)}</td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
