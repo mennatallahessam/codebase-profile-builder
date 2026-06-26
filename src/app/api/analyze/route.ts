@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
           const metrics = JSON.parse(cached.metricsJson as string);
           const health = cached.healthJson ? JSON.parse(cached.healthJson as string) : null;
 
-          const contributors = cached.contributors.map((c) => {
+          const contributors = cached.contributors.map((c: any) => {
             const cMetrics = c.contributorMetrics ? JSON.parse(c.contributorMetrics.detailsJson as string) : {};
             const cProfile = c.contributorProfile ? {
               archetype: c.contributorProfile.archetype,

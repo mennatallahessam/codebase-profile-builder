@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
     const metrics = dbRepo.metricsJson ? JSON.parse(dbRepo.metricsJson as string) : {};
     const health = dbRepo.healthJson ? JSON.parse(dbRepo.healthJson as string) : null;
 
-    const contributors = dbRepo.contributors.map((c) => {
+    const contributors = dbRepo.contributors.map((c: any) => {
       const cMetrics = c.contributorMetrics ? JSON.parse(c.contributorMetrics.detailsJson as string) : {};
       const cProfile = c.contributorProfile ? {
         archetype: c.contributorProfile.archetype,
