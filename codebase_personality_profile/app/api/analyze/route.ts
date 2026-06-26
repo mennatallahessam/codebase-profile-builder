@@ -22,9 +22,7 @@ export async function GET(request: NextRequest) {
   const health = cached.healthJson ? JSON.parse(cached.healthJson as string) : null;
 
   const contributors = (cached.contributors as ContributorCache[]).map((c: ContributorCache) => {
-    const cMetrics = c.contributorMetrics
-      ? JSON.parse(c.contributorMetrics.detailsJson)
-      : null;
+    const cMetrics = c.contributorMetrics ? JSON.parse(c.contributorMetrics.detailsJson) : null;
     const cProfile = c.contributorProfile ? { archetype: c.contributorProfile.archetype } : null;
     return { metrics: cMetrics, profile: cProfile };
   });
