@@ -81,7 +81,17 @@ export async function POST(req: NextRequest) {
               traits: JSON.parse(c.contributorProfile.traitsJson as string),
               superlatives: JSON.parse(c.contributorProfile.superlativesJson as string),
               funFact: c.contributorProfile.funFact,
-            } : { archetype: 'The Developer', summary: '', traits: [], superlatives: [], funFact: '' };
+              contributionType: cMetrics.contributionType || 'General Code Contribution',
+              featuresImplemented: cMetrics.featuresImplemented || ['Contributed features and bug fixes to the codebase.'],
+            } : {
+              archetype: 'The Developer',
+              summary: '',
+              traits: [],
+              superlatives: [],
+              funFact: '',
+              contributionType: cMetrics.contributionType || 'General Code Contribution',
+              featuresImplemented: cMetrics.featuresImplemented || ['Contributed features and bug fixes to the codebase.'],
+            };
 
             return { username: c.username, avatarUrl: c.avatarUrl, displayName: c.displayName, ...cMetrics, profile: cProfile };
           });
@@ -120,7 +130,20 @@ export async function POST(req: NextRequest) {
     const health = computeRepoHealth(commits, packageJson);
 
     // 3️⃣ Construct LLM prompts
-    const prompt = buildPrompt({ owner, name, meta, metrics, commits });
+    const dependencyNames = packageJson ? [
+      ...Object.keys(packageJson.dependencies || {}),
+      ...Object.keys(packageJson.devDependencies || {})
+    ] : [];
+
+    const prompt = buildPrompt({
+      owner,
+      name,
+      meta,
+      metrics,
+      commits,
+      languages: health.languages,
+      dependencies: dependencyNames,
+    });
     const contributorsPrompt = buildContributorsPrompt(contributorMetrics);
 
     // 4️⃣ Call OpenAI (or fall back to mock)
@@ -149,6 +172,15 @@ export async function POST(req: NextRequest) {
         ],
         superlatives: ['Developer'],
         funFact: 'Contributes code consistently.',
+        contributionType: c.ratios.fix > 35 
+          ? 'Bug Fixing & Stability' 
+          : c.ratios.test > 10 
+            ? 'Testing & Quality Assurance' 
+            : 'Feature Implementation',
+        featuresImplemented: [
+          'Implemented core repository functions',
+          'Resolved open bug reports and improved styling'
+        ]
       };
       return {
         ...c,
@@ -242,6 +274,8 @@ export async function POST(req: NextRequest) {
               heatmap: c.heatmap,
               streaks: c.streaks,
               mostActiveDay: c.mostActiveDay,
+              contributionType: c.profile.contributionType || 'General Code Contribution',
+              featuresImplemented: c.profile.featuresImplemented || ['Contributed features and bug fixes to the codebase.'],
             }),
           },
           create: {
@@ -267,6 +301,8 @@ export async function POST(req: NextRequest) {
               heatmap: c.heatmap,
               streaks: c.streaks,
               mostActiveDay: c.mostActiveDay,
+              contributionType: c.profile.contributionType || 'General Code Contribution',
+              featuresImplemented: c.profile.featuresImplemented || ['Contributed features and bug fixes to the codebase.'],
             }),
           },
         });

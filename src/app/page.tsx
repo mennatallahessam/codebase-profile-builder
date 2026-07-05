@@ -56,6 +56,8 @@ interface AnalysisResult {
     collaborationIndex: number;
   };
   profile: {
+    aboutProject?: string;
+    techStack?: string[];
     archetype: string;
     summary: string;
     traits: Trait[];
@@ -659,6 +661,49 @@ export default function Home() {
                       # {badge}
                     </span>
                   ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Project Overview & Tech Stack Card */}
+            <div className="bg-slate-950/40 border border-slate-900 rounded-3xl p-6 md:p-8 backdrop-blur-md space-y-6">
+              <div className="flex flex-col md:flex-row gap-6 md:gap-12 md:items-start">
+                {/* Left: About Project */}
+                <div className="flex-grow space-y-3">
+                  <h3 className="text-slate-350 text-sm font-semibold font-mono uppercase tracking-wider flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                    Project Overview
+                  </h3>
+                  <p className="text-slate-300 text-sm leading-relaxed font-light">
+                    {result.profile.aboutProject || result.repository.description || 'No detailed overview available.'}
+                  </p>
+                </div>
+                {/* Right: Tech Stack Badges */}
+                <div className="md:w-72 shrink-0 space-y-3">
+                  <h3 className="text-slate-350 text-sm font-semibold font-mono uppercase tracking-wider flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+                    Tech Stack Used
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {(result.profile.techStack || (result.health?.languages?.map((l: any) => l.name) || ['JavaScript'])).map((tech: string, idx: number) => {
+                      const colors = [
+                        'from-blue-500/10 to-indigo-500/10 text-blue-400 border-blue-500/20',
+                        'from-purple-500/10 to-pink-500/10 text-purple-400 border-purple-500/20',
+                        'from-emerald-500/10 to-teal-500/10 text-emerald-400 border-emerald-500/20',
+                        'from-amber-500/10 to-orange-500/10 text-amber-400 border-amber-500/20',
+                        'from-cyan-500/10 to-blue-500/10 text-cyan-400 border-cyan-500/20',
+                      ];
+                      const chosenStyle = colors[idx % colors.length];
+                      return (
+                        <span
+                          key={idx}
+                          className={`px-3 py-1.5 rounded-lg border bg-gradient-to-tr text-xs font-mono font-medium ${chosenStyle}`}
+                        >
+                          {tech}
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1366,12 +1411,27 @@ export default function Home() {
                                     </div>
 
                                     <div className="mb-4">
-                                      <span className="text-[9px] font-mono tracking-widest uppercase bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded-full">
-                                        {c.profile.archetype}
-                                      </span>
-                                      <p className="text-slate-400 text-xs mt-2.5 line-clamp-2 leading-relaxed">
+                                      <div className="flex flex-wrap gap-1.5 mb-2.5">
+                                        <span className="text-[9px] font-mono tracking-widest uppercase bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded-full">
+                                          {c.profile.archetype}
+                                        </span>
+                                        <span className="text-[9px] font-mono font-medium text-indigo-400 bg-indigo-500/10 border border-indigo-500/10 px-2 py-0.5 rounded">
+                                          {c.profile.contributionType || 'General Code Contribution'}
+                                        </span>
+                                      </div>
+                                      <p className="text-slate-400 text-xs leading-relaxed line-clamp-2">
                                         {c.profile.summary}
                                       </p>
+                                      {c.profile.featuresImplemented && c.profile.featuresImplemented.length > 0 && (
+                                        <div className="mt-3.5 space-y-1">
+                                          <span className="text-[9px] text-slate-500 font-mono block">Implemented Features:</span>
+                                          <ul className="text-[10px] text-slate-350 font-light space-y-0.5 list-inside list-disc pl-1">
+                                            {c.profile.featuresImplemented.slice(0, 2).map((feat: string, fIdx: number) => (
+                                              <li key={fIdx} className="truncate" title={feat}>{feat}</li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )}
                                     </div>
                                     
                                     <div className="grid grid-cols-3 gap-2 text-center bg-slate-900/35 border border-slate-900 rounded-xl p-2.5 text-xs font-mono">
@@ -1422,9 +1482,14 @@ export default function Home() {
 
                             <div className="flex-grow text-center md:text-left space-y-3">
                               <div>
-                                <span className="px-2.5 py-0.5 rounded-full text-[9px] font-mono tracking-widest uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                                  {selectedContributor.profile.archetype}
-                                </span>
+                                <div className="flex flex-wrap justify-center md:justify-start gap-2 mb-2">
+                                  <span className="px-2.5 py-0.5 rounded-full text-[9px] font-mono tracking-widest uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                                    {selectedContributor.profile.archetype}
+                                  </span>
+                                  <span className="px-2.5 py-0.5 rounded-full text-[9px] font-mono font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20">
+                                    {selectedContributor.profile.contributionType || 'General Code Contribution'}
+                                  </span>
+                                </div>
                                 <h1 className="text-3xl font-extrabold tracking-tight mt-2 text-slate-200 font-[family-name:var(--font-space-grotesk)]">
                                   {selectedContributor.displayName}
                                 </h1>
@@ -1434,6 +1499,17 @@ export default function Home() {
                               <p className="text-slate-350 text-sm leading-relaxed max-w-2xl">
                                 {selectedContributor.profile.summary}
                               </p>
+
+                              {selectedContributor.profile.featuresImplemented && selectedContributor.profile.featuresImplemented.length > 0 && (
+                                <div className="space-y-1 text-left">
+                                  <span className="text-[10px] text-slate-500 font-mono block">Implemented Features:</span>
+                                  <ul className="text-xs text-slate-350 font-light space-y-1 list-inside list-disc pl-1">
+                                    {selectedContributor.profile.featuresImplemented.map((feat: string, fIdx: number) => (
+                                      <li key={fIdx}>{feat}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
 
                               <div className="flex flex-wrap justify-center md:justify-start gap-2 pt-1">
                                 {selectedContributor.profile.superlatives.map((badge: string, idx: number) => (

@@ -44,7 +44,17 @@ export async function GET(req: NextRequest) {
         traits: JSON.parse(c.contributorProfile.traitsJson as string),
         superlatives: JSON.parse(c.contributorProfile.superlativesJson as string),
         funFact: c.contributorProfile.funFact,
-      } : {};
+        contributionType: cMetrics.contributionType || 'General Code Contribution',
+        featuresImplemented: cMetrics.featuresImplemented || ['Contributed features and bug fixes to the codebase.'],
+      } : {
+        archetype: 'The Developer',
+        summary: '',
+        traits: [],
+        superlatives: [],
+        funFact: '',
+        contributionType: cMetrics.contributionType || 'General Code Contribution',
+        featuresImplemented: cMetrics.featuresImplemented || ['Contributed features and bug fixes to the codebase.'],
+      };
       return {
         username: c.username,
         avatarUrl: c.avatarUrl,

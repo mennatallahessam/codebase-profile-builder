@@ -89,6 +89,8 @@ function getMockResponse(prompt: string): any {
   }
 
   return {
+    aboutProject: 'A codebase analysis and profiling application that leverages Git commit history and OpenAI metrics to generate insightful, witty, and developer-focused summaries and archetypes.',
+    techStack: ['Next.js', 'React', 'TypeScript', 'Tailwind CSS', 'Prisma', 'SQLite', 'Recharts', 'Zod'],
     archetype,
     summary,
     traits,
@@ -203,10 +205,24 @@ function getMockContributorsResponse(contributorsMetrics: any[]): any {
       ? 'Pushed directly to the main branch without ever opening a pull request.'
       : `Pushes code primarily in ${lang} with a longest streak of ${c.streaks.longestStreak} days.`;
 
+    const contributionType = fixRatio > 35 
+      ? 'Bug Fixing & Stability' 
+      : testRatio > 10 
+        ? 'Testing & Quality Assurance' 
+        : 'Feature Implementation';
+
+    const featuresImplemented = [
+      `Implemented core components in ${lang || 'JavaScript'}`,
+      `Refactored helper classes and optimized performance`,
+      `Resolved bug reports and improved build stability`
+    ].slice(0, commitsCount > 2 ? 3 : 1);
+
     return {
       username: c.username,
       archetype,
       summary,
+      contributionType,
+      featuresImplemented,
       traits,
       superlatives,
       funFact

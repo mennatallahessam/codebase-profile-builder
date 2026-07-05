@@ -4,12 +4,16 @@ export function buildPrompt({
   meta,
   metrics,
   commits,
+  languages,
+  dependencies,
 }: {
   owner: string;
   name: string;
   meta: any;
   metrics: any;
   commits: any[];
+  languages?: { name: string; value: number }[];
+  dependencies?: string[];
 }) {
   const recentCommitsSummary = commits
     .slice(0, 15)
@@ -17,6 +21,14 @@ export function buildPrompt({
     .join('\n');
 
   const ratios = metrics.ratios;
+  
+  const languagesSummary = languages && languages.length > 0
+    ? languages.map((l) => `${l.name} (${l.value} files)`).join(', ')
+    : 'Unknown';
+
+  const dependenciesSummary = dependencies && dependencies.length > 0
+    ? dependencies.join(', ')
+    : 'None detected';
 
   return `You are the Codebase Personality Profiler, a witty, sarcastic, and highly insightful AI bot. Analyze the codebase metrics and recent commit history for "${owner}/${name}" to generate a hilarious, roasting, yet accurate developer personality profile.
 
@@ -24,6 +36,10 @@ Repository: ${owner}/${name}
 Description: ${meta.description || 'No description provided.'}
 Stars: ${meta.stargazers_count || 0}
 Open Issues: ${meta.open_issues_count || 0}
+
+Technical Context:
+- Tech Stack / Languages (estimate): ${languagesSummary}
+- Detected Dependencies: ${dependenciesSummary}
 
 Metrics computed:
 - Fix Ratio: ${ratios.fix.toFixed(1)}% (percentage of commits containing hotfixes, bugs, fixes, resolving errors)
@@ -39,6 +55,8 @@ ${recentCommitsSummary}
 
 Generate a JSON response representing the codebase's personality. Keep it light-hearted, humorous, and highly engaging. Respond with EXACTLY this JSON structure:
 {
+  "aboutProject": "string (a detailed yet concise summary explaining what this repository/project is all about, what it does, and its main purpose)",
+  "techStack": ["string (a list of the primary libraries, frameworks, tools, or databases used, e.g. React, Next.js, Prisma, SQLite, Tailwind, etc.)"],
   "archetype": "string (name of the personality archetype, e.g., 'The Nocturnal Firefighter', 'The Bureaucratic Architect', 'The Lone Cowboy', 'The Refactoring Addict')",
   "summary": "string (a witty paragraph roasting/describing the codebase based on its metrics and commit history)",
   "traits": [
@@ -75,9 +93,10 @@ export function buildContributorsPrompt(contributorsMetrics: any[]) {
     prsOpened: c.prsOpened,
     prsMerged: c.prsMerged,
     topLanguage: c.languages[0]?.language || 'unknown',
+    recentCommitMessages: c.commitMsgs ? c.commitMsgs.slice(0, 10) : [],
   }));
 
-  return `You are the Codebase Personality Profiler, a witty and highly sarcastic AI bot. Analyze the metrics of each contributor in the repository to generate hilarious, roasting, yet accurate developer personality profiles.
+  return `You are the Codebase Personality Profiler, a witty and highly sarcastic AI bot. Analyze the metrics and recent commit messages of each contributor in the repository to generate hilarious, roasting, yet accurate developer personality profiles and contribution descriptions.
 
 Contributors data:
 ${JSON.stringify(summarizedMetrics, null, 2)}
@@ -89,6 +108,10 @@ Generate a JSON response containing an array of contributor profiles under a "co
       "username": "string (matching the username in the input data)",
       "archetype": "string (name of the personality archetype, e.g., 'The Midnight Refactorer', 'The Drive-By Committer', 'The Test Whisperer', 'The One-Line Hero')",
       "summary": "string (a witty paragraph roasting/describing their developer style based on their stats)",
+      "contributionType": "string (a clear description of the TYPE of contributions they made to this project, e.g., 'Frontend Architecture & Styling', 'Bug Fixing & Stability', 'API Design & Integration', 'CI/CD & DevOps')",
+      "featuresImplemented": [
+        "string (a list of 1-3 specific features, pages, components, or tasks they implemented or worked on, inferred from their commit messages)"
+      ],
       "traits": [
         {
           "name": "string (name of the trait, e.g., 'Anxiety Index', 'Review Allergy', 'Line Bloater')",
@@ -106,4 +129,5 @@ Generate a JSON response containing an array of contributor profiles under a "co
 
 Return ONLY the raw JSON. Do not include markdown code block syntax (like \`\`\`json) in your response. Just return the valid JSON string.`;
 }
+
 

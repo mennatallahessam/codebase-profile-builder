@@ -16,8 +16,15 @@ model Repository {
   metrics      Metric[]
   profileJson  Json?
   metricsJson  Json?
-  healthJson   Json?
-  contributors Contributor[]
+  healthJson           Json?
+  contributors         Contributor[]
+
+  // Actionable Extensions
+  remediationJson      Json?
+  skillMapJson         Json?
+  prAnalyticsJson      Json?
+  onboardingJson       Json?
+  openSourceHealthJson Json?
 }
 
 model Metric {
