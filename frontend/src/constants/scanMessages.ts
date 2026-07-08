@@ -1,0 +1,16 @@
+export const SCAN_MESSAGES = [
+  'Establishing secure connection with GitHub API API...',
+  'Retrieving repository metadata and stargazers...',
+  'Fetching commit logs (capping at 300 commits for sanity)...',
+  'Analyzing author signatures and commit times...',
+  'Parsing pull requests and merging speed...',
+  'Calculating bus factor (preparing warning sirens)...',
+  'Running Codebase Metrics Engine v2.4.1...',
+  'Detecting level of developer panic (fix ratios)...',
+  'Analyzing testing behavior (or lack thereof)...',
+  'Drafting LLM analysis report parameters...',
+  'Sending metric payload to OpenAI Oracle (gpt-4o-mini)...',
+  'Consulting sarcasm database...',
+  'Synthesizing personality profile and predictions...',
+  'Assembling visual dashboard and styling charts...',
+];
