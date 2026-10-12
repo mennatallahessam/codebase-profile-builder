@@ -14,10 +14,7 @@ defineEmits<{ openSettings: [] }>();
           </svg>
         </div>
         <div>
-          <span class="font-bold text-xl tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-            Antigravity
-          </span>
-          <span class="text-xs block text-slate-500 font-mono tracking-widest uppercase -mt-1">
+          <span class="text-xs block text-slate-500 font-mono tracking-widest uppercase">
             Profiler v1.0
           </span>
         </div>
