@@ -7,18 +7,7 @@ defineEmits<{ openSettings: [] }>();
 <template>
   <header class="border-b border-slate-900/80 bg-slate-950/40 backdrop-blur-md px-6 py-4">
     <div class="max-w-7xl mx-auto flex justify-between items-center">
-      <RouterLink to="/" class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
-          <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-        </div>
-        <div>
-          <span class="text-xs block text-slate-500 font-mono tracking-widest uppercase">
-            Profiler v1.0
-          </span>
-        </div>
-      </RouterLink>
+
 
       <div class="flex items-center gap-3">
         <button
