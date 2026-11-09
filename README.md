@@ -159,4 +159,4 @@ Models: `Repository`, `Metric`, `Contributor`, `ContributorMetric`, `Contributor
 
 ## 📄 License
 
-MIT — built by Antigravity AI Pair Programmer.
+MIT — built by Mennatallah Essam as a personal project.
