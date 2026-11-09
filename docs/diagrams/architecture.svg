@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="architecture-title architecture-desc" id="architecture-root">
+        <title id="architecture-title">Codebase Personality Profiler system architecture</title>
+        <desc id="architecture-desc">Architecture diagram showing requests from the Vue 3 SPA flowing through the Next.js API router to SQLite cache, GitHub REST API, local analysis engines, and OpenAI or mock profiling.</desc>
+        <defs>
+      <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;family=Noto+Serif:ital@0;1&amp;family=Noto+Sans+KR:wght@400;500;600&amp;family=Noto+Serif+KR:wght@400&amp;family=Noto+Sans+TC:wght@400;500;600&amp;family=Noto+Serif+TC:wght@400&amp;display=swap');
+      #architecture-root { --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-accent:  #bf4520;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', 'Noto Serif KR', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace; }
+      #architecture-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #architecture-root .diagram-container { width: 100%; overflow-x: auto; }
+      @media print {
+#architecture-root .diagram-container { overflow-x: visible; }
+}</style>
+          <marker id="architecture-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="architecture-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+          <marker id="architecture-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+        <!-- Zones (drawn before arrows and nodes) -->
+        <!-- Zone 1: Analysis Engine -->
+        <rect x="472" y="72" width="184" height="328" rx="8"
+              fill="#2d3142" stroke="#2d3142" stroke-width="0.8" fill-opacity="0.02" stroke-opacity="0.10"/>
+        <rect x="508" y="76" width="112" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="564" y="85" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace"
+              text-anchor="middle" letter-spacing="0.14em">ANALYSIS ENGINE</text>
+
+        <!-- Zone 2: External APIs -->
+        <rect x="728" y="104" width="192" height="296" rx="8"
+              fill="#2d3142" stroke="#2d3142" stroke-width="0.8" fill-opacity="0.02" stroke-opacity="0.10"/>
+        <rect x="772" y="108" width="104" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="824" y="117" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace"
+              text-anchor="middle" letter-spacing="0.14em">EXTERNAL APIS</text>
+
+        <!-- Arrows (drawn before boxes) -->
+        <!-- 1. Vue 3 SPA -> Next.js API Router (headline accent) -->
+        <line x1="184" y1="224" x2="248" y2="224" stroke="#bf4520" stroke-width="1.4" marker-end="url(#architecture-arrow-accent)"/>
+        <!-- 2. Next.js API Router -> Vue 3 SPA (dashed JSON response) -->
+        <line x1="248" y1="248" x2="184" y2="248" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#architecture-arrow)"/>
+
+        <!-- 3. Next.js API Router <-> Prisma + SQLite (vertical fanned ports) -->
+        <line x1="312" y1="268" x2="312" y2="384" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
+        <line x1="344" y1="384" x2="344" y2="268" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#architecture-arrow)"/>
+
+        <!-- 4. Next.js API Router -> GitHub REST API (top port over open canvas) -->
+        <path d="M 328,204 V 52 Q 328,44 336,44 H 816 Q 824,44 824,52 V 144"
+              fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#architecture-arrow-link)"/>
+
+        <!-- 5. Next.js API Router -> Analysis Engine (3 fanned ports on right edge x=408) -->
+        <path d="M 408,220 H 436 Q 444,220 444,212 V 144 Q 444,136 452,136 H 492"
+              fill="none" stroke="#bf4520" stroke-width="1.4" marker-end="url(#architecture-arrow-accent)"/>
+        <line x1="408" y1="236" x2="492" y2="236" stroke="#bf4520" stroke-width="1.4" marker-end="url(#architecture-arrow-accent)"/>
+        <path d="M 408,252 H 436 Q 444,252 444,260 V 328 Q 444,336 452,336 H 492"
+              fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
+
+        <!-- 6. Prompt Builder -> OpenAI / Mock Engine -->
+        <line x1="636" y1="336" x2="752" y2="336" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#architecture-arrow-link)"/>
+
+        <!-- Arrow labels (opaque paper mask + 8px gap from stroke) -->
+        <rect x="196" y="204" width="40" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="216" y="213" fill="#bf4520" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">POST</text>
+
+        <rect x="196" y="256" width="40" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="216" y="265" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">JSON</text>
+
+        <rect x="256" y="320" width="48" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="280" y="329" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">UPSERT</text>
+
+        <rect x="352" y="320" width="44" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="374" y="329" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">CACHE</text>
+
+        <rect x="528" y="24" width="72" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="564" y="33" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">FETCH REPO</text>
+
+        <rect x="380" y="168" width="56" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="408" y="177" fill="#bf4520" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">COMPUTE</text>
+
+        <rect x="668" y="316" width="52" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="694" y="325" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PROMPT</text>
+
+        <!-- Node 1: Vue 3 SPA (input role) -->
+        <rect x="40" y="204" width="144" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="40" y="204" width="144" height="64" rx="6" fill="#4f5d75" stroke="#5a6580" stroke-width="1" fill-opacity="0.10"/>
+        <rect x="48" y="212" width="28" height="12" rx="2" fill="none" stroke="#5a6580" stroke-width="0.8" stroke-opacity="0.40"/>
+        <text x="62" y="221" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SPA</text>
+        <text x="112" y="240" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Vue 3 Frontend</text>
+        <text x="112" y="256" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Vite · ECharts</text>
+
+        <!-- Node 2: Next.js API Router (focal coral) -->
+        <rect x="248" y="204" width="160" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="248" y="204" width="160" height="64" rx="6" fill="#bf4520" stroke="#bf4520" stroke-width="1" fill-opacity="0.08"/>
+        <rect x="256" y="212" width="28" height="12" rx="2" fill="none" stroke="#bf4520" stroke-width="0.8" stroke-opacity="0.50"/>
+        <text x="270" y="221" fill="#bf4520" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">API</text>
+        <text x="328" y="240" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Next.js API Router</text>
+        <text x="328" y="256" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">/analyze · /report</text>
+
+        <!-- Node 3: Prisma + SQLite (store role) -->
+        <rect x="248" y="384" width="160" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="248" y="384" width="160" height="64" rx="6" fill="#2d3142" stroke="#4f5d75" stroke-width="1" fill-opacity="0.05"/>
+        <rect x="256" y="392" width="28" height="12" rx="2" fill="none" stroke="#4f5d75" stroke-width="0.8" stroke-opacity="0.50"/>
+        <text x="270" y="401" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DB</text>
+        <text x="328" y="420" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Prisma + SQLite</text>
+        <text x="328" y="436" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">dev.db · 1h cache</text>
+
+        <!-- Node 4: Metrics & Health (backend role) -->
+        <rect x="492" y="104" width="144" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="492" y="104" width="144" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="500" y="112" width="28" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.40"/>
+        <text x="514" y="121" fill="#2d3142" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">LIB</text>
+        <text x="564" y="140" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Metrics &amp; Health</text>
+        <text x="564" y="156" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">metrics · repoHealth</text>
+
+        <!-- Node 5: Contributor Engine (backend role) -->
+        <rect x="492" y="204" width="144" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="492" y="204" width="144" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="500" y="212" width="28" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.40"/>
+        <text x="514" y="221" fill="#2d3142" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">LIB</text>
+        <text x="564" y="240" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Contributor Engine</text>
+        <text x="564" y="256" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">streaks · collab graph</text>
+
+        <!-- Node 6: Prompt Builder (backend role) -->
+        <rect x="492" y="304" width="144" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="492" y="304" width="144" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="500" y="312" width="28" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.40"/>
+        <text x="514" y="321" fill="#2d3142" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">LIB</text>
+        <text x="564" y="340" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Prompt Builder</text>
+        <text x="564" y="356" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">prompt.ts · templates</text>
+
+        <!-- Node 7: GitHub REST API (external role) -->
+        <rect x="752" y="144" width="144" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="752" y="144" width="144" height="64" rx="6" fill="#2d3142" stroke="#2d3142" stroke-width="1" fill-opacity="0.03" stroke-opacity="0.30"/>
+        <rect x="760" y="152" width="28" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.22"/>
+        <text x="774" y="161" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EXT</text>
+        <text x="824" y="180" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">GitHub REST API</text>
+        <text x="824" y="196" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">commits · PRs · stats</text>
+
+        <!-- Node 8: OpenAI / Mock Engine (external role) -->
+        <rect x="752" y="304" width="144" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="752" y="304" width="144" height="64" rx="6" fill="#2d3142" stroke="#2d3142" stroke-width="1" fill-opacity="0.03" stroke-opacity="0.30"/>
+        <rect x="760" y="312" width="28" height="12" rx="2" fill="none" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.22"/>
+        <text x="774" y="321" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">LLM</text>
+        <text x="824" y="340" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">OpenAI / Mock</text>
+        <text x="824" y="356" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">GPT-4o · fallback</text>
+
+        <!-- Legend strip (bottom 60px) -->
+        <line x1="40" y1="532" x2="920" y2="532" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.10"/>
+        <text x="40" y="548" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+
+        <rect x="40" y="564" width="16" height="12" rx="2" fill="#bf4520" stroke="#bf4520" stroke-width="1" fill-opacity="0.08"/>
+        <text x="64" y="573" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Focal API</text>
+
+        <rect x="148" y="564" width="16" height="12" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="172" y="573" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Analysis module</text>
+
+        <rect x="284" y="564" width="16" height="12" rx="2" fill="#2d3142" stroke="#4f5d75" stroke-width="1" fill-opacity="0.05"/>
+        <text x="308" y="573" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">SQLite store</text>
+
+        <rect x="400" y="564" width="16" height="12" rx="2" fill="#4f5d75" stroke="#5a6580" stroke-width="1" fill-opacity="0.10"/>
+        <text x="424" y="573" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Client SPA</text>
+
+        <rect x="508" y="564" width="16" height="12" rx="2" fill="#2d3142" stroke="#2d3142" stroke-width="1" fill-opacity="0.03" stroke-opacity="0.30"/>
+        <text x="532" y="573" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">External service</text>
+
+        <line x1="644" y1="570" x2="672" y2="570" stroke="#bf4520" stroke-width="1.4" marker-end="url(#architecture-arrow-accent)"/>
+        <text x="680" y="573" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Primary pipeline</text>
+
+        <line x1="784" y1="570" x2="812" y2="570" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#architecture-arrow-link)"/>
+        <text x="820" y="573" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">External HTTP</text>
+      </svg>

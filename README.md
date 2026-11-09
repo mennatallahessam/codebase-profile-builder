@@ -72,20 +72,26 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## 🏗️ Architecture
 
+![System Architecture](./docs/diagrams/architecture.svg)
+
+### 🔄 Analysis & Profiling Pipeline
+
+![Analysis & Profiling Flowchart](./docs/diagrams/flowchart.svg)
+
+### 📂 Directory Structure
+
 ```
-src/
 ├── app/
-│   ├── page.tsx               # Main UI — homepage, analysis dashboard
-│   ├── layout.tsx             # Root layout with fonts & metadata
-│   ├── report/[id]/page.tsx   # Public permalink report page
 │   └── api/
-│       ├── analyze/route.ts   # POST — fetches GitHub data, computes metrics, calls OpenAI, stores to DB
-│       ├── report/route.ts    # GET  — retrieves a stored report by ID
-│       └── badge/[owner]/[repo]/route.ts  # GET — serves SVG status badge
-├── components/
-│   ├── Heatmap.tsx            # Custom commit activity heatmap
-│   ├── CollaborationGraph.tsx # SVG-based contributor collaboration graph
-│   └── Treemap.tsx            # File churn treemap visualization
+│       ├── analyze/route.ts               # POST — fetches GitHub data, computes metrics, calls OpenAI, stores to DB
+│       ├── report/route.ts                # GET  — retrieves a stored report by ID
+│       ├── status/route.ts                # GET  — checks API key configuration status
+│       └── badge/[owner]/[repo]/route.ts  # GET  — serves SVG status badge
+├── frontend/
+│   └── src/
+│       ├── components/                    # Vue 3 dashboard tabs, ECharts cards, Heatmap, Treemap, CollaborationGraph
+│       ├── composables/                   # useAnalysis & useCredentials state hooks
+│       └── router/                        # HomeView & ReportView routes
 └── lib/
     ├── github.ts              # GitHub REST API client (commits, PRs, contributors, stats)
     ├── metrics.ts             # Pure metrics computation (ratios, bus factor, time-of-day, etc.)
@@ -126,11 +132,13 @@ When no OpenAI API key is set, the app uses a deterministic mock engine:
 
 ---
 
-## 🗃️ Database
+## 🗃️ Database (ERD)
 
 The app uses **SQLite** via [Prisma 7](https://www.prisma.io/) with the `@prisma/adapter-better-sqlite3` driver adapter. The database file is `dev.db` in the project root.
 
 Models: `Repository`, `Metric`, `Contributor`, `ContributorMetric`, `ContributorProfile`
+
+![Database Entity-Relationship Diagram](./docs/diagrams/erd.svg)
 
 ---
 
