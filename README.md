@@ -229,6 +229,21 @@ npm run dev
 
 ---
 
+## 👩‍💻 About the Author
+
+**Mennatallah Essam** — *Full-Stack Software Engineer*
+
+**Codebase Personality Profiler** was designed and built from the ground up by **Mennatallah Essam** as a personal engineering project exploring the intersection of **developer experience (DX), static/behavioral repository analytics, and applied AI**.
+
+### Project Motivation & Engineering Focus
+- **Turning Git History into Engineering Intelligence** — Standard repository metrics often look like dry spreadsheets. This project was created to bridge rigorous software health indicators (bus factor, file churn hotspots, collaboration graphs, and test discipline) with engaging, human-readable storytelling.
+- **Resilient Full-Stack Architecture** — Built with a modern hybrid stack combining a **Next.js 16 + TypeScript** backend, **Prisma 7 + SQLite** caching layer, and an interactive **Vue 3 + Vite + Apache ECharts** visualization frontend.
+- **Production-Minded UX** — Engineered with zero-config deterministic fallbacks, runtime Bring-Your-Own-Key (BYOK) support, rate-limit resilience, and shareable read-only reports.
+
+🔗 **GitHub:** [@mennatallahessam](https://github.com/mennatallahessam)
+
+---
+
 ## 📄 License
 
-MIT — built by Mennatallah Essam as a personal project.
+MIT — built by **Mennatallah Essam** as a personal project.
